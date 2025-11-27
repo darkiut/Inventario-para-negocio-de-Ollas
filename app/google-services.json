@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "977587125876",
+    "project_id": "inventarioollas",
+    "storage_bucket": "inventarioollas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:977587125876:android:0c95283e953da445de1b21",
+        "android_client_info": {
+          "package_name": "com.negocio.inventarioollas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_hTt7AwyumfoeDVx13vczZexywrbVhAs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
