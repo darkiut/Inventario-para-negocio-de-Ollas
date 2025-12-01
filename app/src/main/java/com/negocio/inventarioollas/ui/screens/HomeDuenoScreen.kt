@@ -11,42 +11,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.negocio.inventarioollas.models.Producto
 import com.negocio.inventarioollas.models.Usuario
 import com.negocio.inventarioollas.models.Venta
+import com.negocio.inventarioollas.utils.ExcelGenerator
 import com.negocio.inventarioollas.viewmodels.AuthViewModel
 import com.negocio.inventarioollas.viewmodels.DuenoViewModel
 import com.negocio.inventarioollas.viewmodels.ProductoViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.FilterChip
-import androidx.compose.ui.text.style.TextAlign
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDuenoScreen(
     usuario: Usuario,
     authViewModel: AuthViewModel,
-    duenoViewModel: DuenoViewModel = viewModel(), // Este sí se queda
+    duenoViewModel: DuenoViewModel = viewModel(),
+    productoViewModel: ProductoViewModel = viewModel(),
     onNavigateToProductos: () -> Unit,
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onNavigateToEditarProducto: () -> Unit,
+    onNavigateToConfig: () -> Unit
 ) {
     val state = duenoViewModel.state
     var showMenu by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var showFiltroDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    // Cargar datos al entrar (sin verificar si están vacíos)
-    LaunchedEffect(true) {
+    // Obtenemos el contexto necesario para generar el Excel
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
         duenoViewModel.cargarDatos()
     }
-
-
 
     Scaffold(
         topBar = {
@@ -55,7 +60,7 @@ fun HomeDuenoScreen(
                     Column {
                         Text("Panel del Dueño")
                         Text(
-                            text = usuario.nombre,
+                            text = "Dueño: ${usuario.nombre}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Normal
                         )
@@ -69,6 +74,14 @@ fun HomeDuenoScreen(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Configurar Negocio") },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToConfig()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
+                        )
                         DropdownMenuItem(
                             text = { Text("Cerrar sesión") },
                             onClick = {
@@ -88,11 +101,13 @@ fun HomeDuenoScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToProductos,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar producto")
+            if (selectedTab == 1) {
+                FloatingActionButton(
+                    onClick = onNavigateToProductos,
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Agregar producto")
+                }
             }
         }
     ) { paddingValues ->
@@ -101,7 +116,7 @@ fun HomeDuenoScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Tarjetas de estadísticas
+            // Stats
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -157,7 +172,6 @@ fun HomeDuenoScreen(
                 }
             }
 
-            // Tabs
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
@@ -171,12 +185,10 @@ fun HomeDuenoScreen(
                 )
             }
 
-            // Contenido según tab
             when (selectedTab) {
                 0 -> {
-                    // Tab de Ventas
+                    // TAB VENTAS
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Selector de fecha
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -187,7 +199,7 @@ fun HomeDuenoScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     if (duenoViewModel.state.fechaSeleccionada == null)
-                                        "Todas las ventas (últimos 30 días)"
+                                        "Todas las ventas (30 días)"
                                     else
                                         "Ventas del ${duenoViewModel.state.fechaSeleccionada}",
                                     fontWeight = FontWeight.SemiBold
@@ -200,30 +212,51 @@ fun HomeDuenoScreen(
                                     )
                                 }
                             }
+                        }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (duenoViewModel.state.fechaSeleccionada != null) {
-                                    OutlinedButton(
-                                        onClick = { duenoViewModel.filtrarPorFecha(null) }
-                                    ) {
-                                        Text("Ver Todas")
-                                    }
-                                }
-                                Button(
-                                    onClick = { showFiltroDialog = true }
-                                ) {
-                                    Icon(
-                                        Icons.Default.DateRange,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Por Día")
+                        // BOTONES DE ACCIÓN (Excel y Filtros)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // BOTÓN EXCEL (NUEVO)
+                            Button(
+                                onClick = {
+                                    val excelGenerator = ExcelGenerator(context)
+                                    // Exportamos lo que se está viendo en pantalla (filtrado)
+                                    excelGenerator.generarReporteMensual(state.ventasFiltradas)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D6F42)) // Verde Excel
+                            ) {
+                                Icon(Icons.Default.List, contentDescription = null) // Icono de lista
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Excel")
+                            }
+
+                            // Botón Filtrar
+                            Button(
+                                onClick = { showFiltroDialog = true },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Filtrar")
+                            }
+
+                            // Botón Limpiar Filtro (X)
+                            if (duenoViewModel.state.fechaSeleccionada != null) {
+                                OutlinedButton(onClick = { duenoViewModel.filtrarPorFecha(null) }) {
+                                    Icon(Icons.Default.Close, contentDescription = null)
                                 }
                             }
                         }
 
-                        // Chip con filtro de vendedor (si existe)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Filtro de vendedor activo
                         if (duenoViewModel.filtroVendedor != null) {
                             Row(
                                 modifier = Modifier
@@ -238,7 +271,7 @@ fun HomeDuenoScreen(
                                     trailingIcon = {
                                         Icon(
                                             Icons.Default.Close,
-                                            contentDescription = "Quitar filtro",
+                                            contentDescription = null,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
@@ -247,6 +280,7 @@ fun HomeDuenoScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
+                        // Lista
                         if (state.isLoading) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
@@ -272,8 +306,7 @@ fun HomeDuenoScreen(
                                             "No hay ventas el ${duenoViewModel.state.fechaSeleccionada}"
                                         else
                                             "No hay ventas registradas",
-                                        color = MaterialTheme.colorScheme.outline,
-                                        textAlign = TextAlign.Center
+                                        color = MaterialTheme.colorScheme.outline
                                     )
                                 }
                             }
@@ -290,59 +323,68 @@ fun HomeDuenoScreen(
                     }
                 }
                 1 -> {
-                    // Tab de Inventario
-                    if (state.productos.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Icons.Default.Home,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.outline
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
+                    // TAB INVENTARIO
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        OutlinedTextField(
+                            value = duenoViewModel.searchQuery,
+                            onValueChange = { duenoViewModel.onSearchQueryChange(it) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            placeholder = { Text("Buscar producto...") },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (duenoViewModel.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { duenoViewModel.onSearchQueryChange("") }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                    }
+                                }
+                            },
+                            singleLine = true
+                        )
+
+                        if (state.productosFiltrados.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    "No hay productos registrados",
+                                    if (duenoViewModel.searchQuery.isEmpty()) "No hay productos registrados"
+                                    else "No se encontraron resultados",
                                     color = MaterialTheme.colorScheme.outline
                                 )
                             }
-                        }
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(state.productos) { producto ->
-                                ProductoCard(
-                                    producto = producto,
-                                    onAumentarStock = { productoId, cantidad ->
-                                        duenoViewModel.aumentarStock(productoId, cantidad)
-                                    }
-                                )
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(state.productosFiltrados) { producto ->
+                                    ProductoCard(
+                                        producto = producto,
+                                        onAumentarStock = { pid, cant ->
+                                            duenoViewModel.aumentarStock(pid, cant)
+                                        },
+                                        onEditarProducto = { p ->
+                                            scope.launch {
+                                                delay(300)
+                                                productoViewModel.seleccionarProductoParaEditar(p)
+                                                onNavigateToEditarProducto()
+                                            }
+                                        },
+                                        onEliminarProducto = { pid ->
+                                            productoViewModel.eliminarProducto(pid) {}
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
-
             }
         }
     }
 
-    // Diálogo de filtro
-    if (showFiltroDialog) {
-        FiltroVendedorDialog(
-            vendedores = duenoViewModel.obtenerVendedoresUnicos(),
-            onDismiss = { showFiltroDialog = false },
-            onSeleccionar = { vendedorId ->
-                duenoViewModel.filtrarPorVendedor(vendedorId)
-                showFiltroDialog = false
-            }
-        )
-    }
-    // Diálogo de selección de fecha
     if (showFiltroDialog) {
         AlertDialog(
             onDismissRequest = { showFiltroDialog = false },
@@ -379,7 +421,7 @@ fun HomeDuenoScreen(
                     if (duenoViewModel.state.diasConVentas.isEmpty()) {
                         item {
                             Text(
-                                "No hay ventas en los últimos 30 días",
+                                "No hay ventas recientes",
                                 modifier = Modifier.padding(16.dp),
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -394,8 +436,8 @@ fun HomeDuenoScreen(
             }
         )
     }
-
 }
+
 @Composable
 fun VentaCard(venta: Venta) {
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -403,11 +445,10 @@ fun VentaCard(venta: Venta) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, Color(0xFF4CAF50))
+        border = BorderStroke(1.dp, Color(0xFF4CAF50)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -433,34 +474,26 @@ fun VentaCard(venta: Venta) {
                         Text(
                             text = "Vendedor: ${venta.vendedorNombre}",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
-
                 Text(
                     text = "S/ ${String.format("%.2f", venta.total)}",
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF4CAF50)
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = fecha,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = fecha, fontSize = 12.sp, color = Color.Gray)
 
             if (venta.clienteTelefono.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Tel: ${venta.clienteTelefono}",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.Gray
                 )
             }
 
@@ -468,73 +501,19 @@ fun VentaCard(venta: Venta) {
             Divider()
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                "Productos vendidos:",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
+            Text("Productos:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             venta.productos.values.forEach { item ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        "• ${item.nombre} x${item.cantidad}",
-                        fontSize = 12.sp
-                    )
+                    Text("• ${item.nombre} x${item.cantidad}", fontSize = 12.sp)
                     Text(
                         "S/ ${String.format("%.2f", item.subtotal)}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 12.sp
                     )
                 }
             }
         }
     }
-}
-
-@Composable
-fun FiltroVendedorDialog(
-    vendedores: List<Pair<String, String>>,
-    onDismiss: () -> Unit,
-    onSeleccionar: (String) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Filtrar por Vendedor") },
-        text = {
-            LazyColumn {
-                items(vendedores) { (vendedorId, vendedorNombre) ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        onClick = { onSeleccionar(vendedorId) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(vendedorNombre)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
-            }
-        }
-    )
 }

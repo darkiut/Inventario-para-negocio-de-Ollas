@@ -1,40 +1,38 @@
 package com.negocio.inventarioollas.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.negocio.inventarioollas.models.Usuario
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.negocio.inventarioollas.viewmodels.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    viewModel: AuthViewModel,
-    onRegisterSuccess: (Usuario) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onRegisterSuccess: () -> Unit, // Este faltaba
+    authViewModel: AuthViewModel = viewModel()
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    var selectedRol by remember { mutableStateOf("vendedor") }
-    var expandedRol by remember { mutableStateOf(false) }
+    var nombre by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var rolSeleccionado by remember { mutableStateOf("vendedor") } // "vendedor" o "dueno"
 
-    val roles = listOf("vendedor", "dueno")
-    val authState = viewModel.authState
+    val state = authViewModel.state
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Crear Cuenta") },
+                title = { Text("Registro de Usuario") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
@@ -42,7 +40,8 @@ fun RegisterScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -51,156 +50,76 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Registro de Usuario",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+            if (state.error != null) {
+                Text(text = state.error, color = MaterialTheme.colorScheme.error)
+            }
+
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                label = { Text("Nombre Completo") },
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Campo de nombre
             OutlinedTextField(
-                value = viewModel.nombre,
-                onValueChange = { viewModel.onNombreChange(it) },
-                label = { Text("Nombre completo") },
-                leadingIcon = {
-                    Icon(Icons.Default.Person, contentDescription = null)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Correo Electrónico") },
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Campo de correo
             OutlinedTextField(
-                value = viewModel.email,
-                onValueChange = { viewModel.onEmailChange(it) },
-                label = { Text("Correo electrónico") },
-                leadingIcon = {
-                    Icon(Icons.Default.Email, contentDescription = null)
-                },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email
-                ),
-                isError = viewModel.emailError != null,
-                supportingText = {
-                    viewModel.emailError?.let { Text(it) }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Campo de contraseña
-            OutlinedTextField(
-                value = viewModel.password,
-                onValueChange = { viewModel.onPasswordChange(it) },
+                value = password,
+                onValueChange = { password = it },
                 label = { Text("Contraseña") },
-                leadingIcon = {
-                    Icon(Icons.Default.Lock, contentDescription = null)
-                },
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Text(
-                            text = if (passwordVisible) "👁️" else "🔒",
-                            fontSize = 20.sp
-                        )
-                    }
-                },
-                visualTransformation = if (passwordVisible) VisualTransformation.None
-                else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password
-                ),
-                isError = viewModel.passwordError != null,
-                supportingText = {
-                    viewModel.passwordError?.let { Text(it) }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Selector de rol
-            ExposedDropdownMenuBox(
-                expanded = expandedRol,
-                onExpandedChange = { expandedRol = !expandedRol }
+            // Selector de Rol (Simple)
+            Text("Selecciona el Rol:", fontSize = 16.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                OutlinedTextField(
-                    value = if (selectedRol == "dueno") "Dueño" else "Vendedor",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Rol") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRol)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = expandedRol,
-                    onDismissRequest = { expandedRol = false }
-                ) {
-                    roles.forEach { rol ->
-                        DropdownMenuItem(
-                            text = { Text(if (rol == "dueno") "Dueño" else "Vendedor") },
-                            onClick = {
-                                selectedRol = rol
-                                expandedRol = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Mostrar error
-            if (authState.error != null) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = authState.error,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(16.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = rolSeleccionado == "vendedor",
+                        onClick = { rolSeleccionado = "vendedor" }
                     )
+                    Text("Vendedor")
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = rolSeleccionado == "dueno",
+                        onClick = { rolSeleccionado = "dueno" }
+                    )
+                    Text("Dueño")
+                }
             }
 
-            // Botón de registro
             Button(
                 onClick = {
-                    viewModel.registrarUsuario(selectedRol, onRegisterSuccess)
-                },
-                enabled = !authState.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                if (authState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                    authViewModel.registrarUsuario(
+                        nombre = nombre,
+                        email = email,
+                        password = password,
+                        rol = rolSeleccionado,
+                        onSuccess = onRegisterSuccess
                     )
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                enabled = !state.isLoading
+            ) {
+                if (state.isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("REGISTRARSE", fontSize = 16.sp)
+                    Text("Crear Cuenta")
                 }
             }
         }

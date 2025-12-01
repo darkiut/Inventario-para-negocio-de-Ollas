@@ -5,135 +5,96 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.negocio.inventarioollas.models.Usuario
 import com.negocio.inventarioollas.repository.FirebaseRepository
 import kotlinx.coroutines.launch
 
-
+// Estado de Autenticación
 data class AuthState(
+    val usuario: Usuario? = null, // Esto es lo que MainActivity necesita leer
     val isLoading: Boolean = false,
-    val usuario: Usuario? = null,
     val error: String? = null,
     val isAuthenticated: Boolean = false
 )
 
 class AuthViewModel : ViewModel() {
-
     private val repository = FirebaseRepository()
 
-    var authState by mutableStateOf(AuthState())
+    // Variable PÚBLICA llamada 'state' para que MainActivity la encuentre
+    var state by mutableStateOf(AuthState())
         private set
 
-    var email by mutableStateOf("")
-        private set
+    // Variable auxiliar para obtener el usuario actual rápidamente
+    val usuarioActual: Usuario?
+        get() = state.usuario
 
-    var password by mutableStateOf("")
-        private set
-
-    var nombre by mutableStateOf("")
-        private set
-
-    var emailError by mutableStateOf<String?>(null)
-        private set
-
-    var passwordError by mutableStateOf<String?>(null)
-        private set
-
-    fun onEmailChange(newEmail: String) {
-        email = newEmail
-        emailError = null
+    init {
+        verificarSesion()
     }
 
-    fun onPasswordChange(newPassword: String) {
-        password = newPassword
-        passwordError = null
-    }
-
-    fun onNombreChange(newNombre: String) {
-        nombre = newNombre
-    }
-
-    private fun validateEmail(): Boolean {
-        return when {
-            email.isBlank() -> {
-                emailError = "El correo es requerido"
-                false
-            }
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
-                emailError = "Formato de correo inválido"
-                false
-            }
-            else -> {
-                emailError = null
-                true
+    private fun verificarSesion() {
+        val uid = repository.obtenerUsuarioActual()
+        if (uid != null) {
+            viewModelScope.launch {
+                state = state.copy(isLoading = true)
+                repository.obtenerUsuarioPorId(uid)
+                    .onSuccess { usuario ->
+                        state = state.copy(
+                            usuario = usuario,
+                            isAuthenticated = true,
+                            isLoading = false
+                        )
+                    }
+                    .onFailure {
+                        state = state.copy(isLoading = false)
+                    }
             }
         }
     }
 
-    private fun validatePassword(): Boolean {
-        return when {
-            password.isBlank() -> {
-                passwordError = "La contraseña es requerida"
-                false
-            }
-            password.length < 6 -> {
-                passwordError = "La contraseña debe tener al menos 6 caracteres"
-                false
-            }
-            else -> {
-                passwordError = null
-                true
-            }
-        }
-    }
-
-    fun iniciarSesion(onSuccess: (Usuario) -> Unit) {
-        if (!validateEmail() || !validatePassword()) return
-
-        authState = authState.copy(isLoading = true, error = null)
-
-        viewModelScope.launch {
-            val result = repository.iniciarSesion(email, password)
-
-            result.onSuccess { usuario ->
-                authState = authState.copy(
-                    isLoading = false,
-                    usuario = usuario,
-                    isAuthenticated = true
-                )
-                onSuccess(usuario)
-            }.onFailure { error ->
-                authState = authState.copy(
-                    isLoading = false,
-                    error = error.message ?: "Error al iniciar sesión"
-                )
-            }
-        }
-    }
-
-    fun registrarUsuario(rol: String, onSuccess: (Usuario) -> Unit) {
-        if (!validateEmail() || !validatePassword() || nombre.isBlank()) {
-            authState = authState.copy(error = "Por favor completa todos los campos")
+    fun iniciarSesion(email: String, password: String, onSuccess: (Usuario) -> Unit) {
+        if (email.isBlank() || password.isBlank()) {
+            state = state.copy(error = "Llena todos los campos")
             return
         }
 
-        authState = authState.copy(isLoading = true, error = null)
-
         viewModelScope.launch {
-            val result = repository.registrarUsuario(email, password, nombre, rol)
+            state = state.copy(isLoading = true, error = null)
+            val result = repository.iniciarSesion(email, password)
 
             result.onSuccess { usuario ->
-                authState = authState.copy(
-                    isLoading = false,
+                state = state.copy(
                     usuario = usuario,
-                    isAuthenticated = true
+                    isAuthenticated = true,
+                    isLoading = false
                 )
                 onSuccess(usuario)
-            }.onFailure { error ->
-                authState = authState.copy(
+            }.onFailure { e ->
+                state = state.copy(
                     isLoading = false,
-                    error = error.message ?: "Error al registrar usuario"
+                    error = "Error: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun registrarUsuario(nombre: String, email: String, password: String, rol: String, onSuccess: () -> Unit) {
+        if (nombre.isBlank() || email.isBlank() || password.isBlank()) {
+            state = state.copy(error = "Llena todos los campos")
+            return
+        }
+
+        viewModelScope.launch {
+            state = state.copy(isLoading = true, error = null)
+            val result = repository.registrarUsuario(email, password, nombre, rol)
+
+            result.onSuccess {
+                state = state.copy(isLoading = false)
+                onSuccess()
+            }.onFailure { e ->
+                state = state.copy(
+                    isLoading = false,
+                    error = "Error al registrar: ${e.message}"
                 )
             }
         }
@@ -141,34 +102,10 @@ class AuthViewModel : ViewModel() {
 
     fun cerrarSesion() {
         repository.cerrarSesion()
-        authState = AuthState()
-        email = ""
-        password = ""
-        nombre = ""
+        state = AuthState() // Reiniciar estado
     }
 
-    fun limpiarError() {
-        authState = authState.copy(error = null)
+    fun limpiarErrores() {
+        state = state.copy(error = null)
     }
-
-    fun cargarUsuarioActual() {
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser != null) {
-            authState = authState.copy(isLoading = true)
-
-            viewModelScope.launch {
-                val result = repository.obtenerUsuarioPorId(currentUser.uid)
-                result.onSuccess { usuario ->
-                    authState = authState.copy(
-                        isLoading = false,
-                        usuario = usuario,
-                        isAuthenticated = true
-                    )
-                }.onFailure {
-                    authState = authState.copy(isLoading = false)
-                }
-            }
-        }
-    }
-
 }

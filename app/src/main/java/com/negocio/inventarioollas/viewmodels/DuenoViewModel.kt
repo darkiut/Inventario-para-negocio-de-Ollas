@@ -9,143 +9,133 @@ import com.negocio.inventarioollas.models.Producto
 import com.negocio.inventarioollas.models.Venta
 import com.negocio.inventarioollas.repository.FirebaseRepository
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.*
 
 data class DuenoState(
-    val ventas: List<Venta> = emptyList(),
     val productos: List<Producto> = emptyList(),
+    val productosFiltrados: List<Producto> = emptyList(), // LISTA PARA MOSTRAR
+    val ventas: List<Venta> = emptyList(),
     val ventasFiltradas: List<Venta> = emptyList(),
-    val ventasDelDia: List<Venta> = emptyList(), // NUEVO
-    val totalVentas: Double = 0.0,
     val totalVentasHoy: Double = 0.0,
-    val diasConVentas: List<String> = emptyList(), // NUEVO - Lista de fechas con ventas
-    val fechaSeleccionada: String? = null, // NUEVO - Fecha seleccionada para filtrar
-    val isLoading: Boolean = true,
-    val ventasEliminadas: Int = 0 // NUEVO - Contador de ventas eliminadas
+    val totalVentas: Double = 0.0,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val ventasEliminadas: Int = 0,
+    val diasConVentas: List<String> = emptyList(),
+    val fechaSeleccionada: String? = null
 )
 
 class DuenoViewModel : ViewModel() {
-
     private val repository = FirebaseRepository()
 
     var state by mutableStateOf(DuenoState())
         private set
 
-    var filtroVendedor by mutableStateOf<String?>(null)
-        private set
+    var filtroVendedor: String? = null
+    var filtroFecha: String? = null
+
+    // Variable para el buscador del Dueño
+    var searchQuery by mutableStateOf("")
+
+    init {
+        cargarDatos()
+    }
 
     fun cargarDatos() {
-        cargarVentas()
-        cargarProductos()
-        eliminarVentasAntiguas()
-    }
-
-    private fun cargarVentas() {
         viewModelScope.launch {
-            repository.obtenerVentasUltimoMes().collect { ventas ->
-                val ahora = Calendar.getInstance()
-                val hoy = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
+            state = state.copy(isLoading = true)
+
+            // 1. Cargar Productos
+            launch {
+                repository.obtenerProductos().collect { productos ->
+                    state = state.copy(
+                        productos = productos,
+                        productosFiltrados = productos // Inicialmente todo
+                    )
+                    if (searchQuery.isNotEmpty()) onSearchQueryChange(searchQuery)
                 }
+            }
 
-                val ventasHoy = ventas.filter { venta ->
-                    val ventaCalendar = Calendar.getInstance().apply {
-                        timeInMillis = venta.fecha
-                    }
-                    ventaCalendar.get(Calendar.YEAR) == hoy.get(Calendar.YEAR) &&
-                            ventaCalendar.get(Calendar.DAY_OF_YEAR) == hoy.get(Calendar.DAY_OF_YEAR)
+            // 2. Cargar Ventas
+            launch {
+                repository.obtenerVentas().collect { ventas ->
+                    procesarVentas(ventas)
                 }
-
-                val totalHoy = ventasHoy.sumOf { it.total }
-                val totalGeneral = ventas.sumOf { it.total }
-
-                // Obtener días únicos con ventas
-                val diasConVentas = ventas.map { venta ->
-                    val cal = Calendar.getInstance().apply { timeInMillis = venta.fecha }
-                    "${cal.get(Calendar.DAY_OF_MONTH)}/${cal.get(Calendar.MONTH) + 1}/${cal.get(Calendar.YEAR)}"
-                }.distinct().sorted()
-
-                state = state.copy(
-                    ventas = ventas,
-                    ventasFiltradas = ventas,
-                    ventasDelDia = ventasHoy,
-                    totalVentas = totalGeneral,
-                    totalVentasHoy = totalHoy,
-                    diasConVentas = diasConVentas,
-                    isLoading = false
-                )
-
-                filtroVendedor?.let { filtrarPorVendedor(it) }
             }
         }
     }
 
-    private fun cargarProductos() {
-        viewModelScope.launch {
-            repository.obtenerProductos().collect { productos ->
-                state = state.copy(productos = productos)
+    // --- FUNCIÓN DE BÚSQUEDA DEL DUEÑO ---
+    fun onSearchQueryChange(query: String) {
+        searchQuery = query
+        if (query.isBlank()) {
+            state = state.copy(productosFiltrados = state.productos)
+        } else {
+            val filtrados = state.productos.filter {
+                it.nombre.contains(query, ignoreCase = true) ||
+                        it.codigo.contains(query, ignoreCase = true)
             }
+            state = state.copy(productosFiltrados = filtrados)
         }
     }
 
-    private fun eliminarVentasAntiguas() {
-        viewModelScope.launch {
-            val result = repository.eliminarVentasAntiguas()
-            result.onSuccess { cantidad ->
-                state = state.copy(ventasEliminadas = cantidad)
-                if (cantidad > 0) {
-                    android.util.Log.d("DuenoViewModel", "Se eliminaron $cantidad ventas antiguas")
-                }
-            }
+    private fun procesarVentas(todasLasVentas: List<Venta>) {
+        val fechaLimite = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }.timeInMillis
+        val ventasRecientes = todasLasVentas.filter { it.fecha >= fechaLimite }
+        val ventasAntiguasCount = todasLasVentas.size - ventasRecientes.size
+
+        var totalHoy = 0.0
+        var totalGeneral = 0.0
+        val diasSet = sortedSetOf<String>(reverseOrder())
+        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val hoyStr = sdf.format(Date())
+
+        ventasRecientes.forEach { venta ->
+            totalGeneral += venta.total
+            val fechaVenta = sdf.format(Date(venta.fecha))
+            diasSet.add(fechaVenta)
+            if (fechaVenta == hoyStr) totalHoy += venta.total
         }
+
+        if (filtroFecha == null) filtroFecha = hoyStr
+
+        state = state.copy(
+            ventas = ventasRecientes,
+            totalVentas = totalGeneral,
+            totalVentasHoy = totalHoy,
+            ventasEliminadas = ventasAntiguasCount,
+            diasConVentas = diasSet.toList(),
+            isLoading = false
+        )
+        aplicarFiltros()
+    }
+
+    fun filtrarPorFecha(fecha: String?) {
+        filtroFecha = fecha
+        aplicarFiltros()
     }
 
     fun filtrarPorVendedor(vendedorId: String?) {
         filtroVendedor = vendedorId
-
-        val ventasFiltradas = if (vendedorId == null) {
-            state.ventas
-        } else {
-            state.ventas.filter { it.vendedorId == vendedorId }
-        }
-
-        state = state.copy(ventasFiltradas = ventasFiltradas)
+        aplicarFiltros()
     }
 
-    // NUEVA FUNCIÓN - Filtrar por fecha específica
-    fun filtrarPorFecha(fecha: String?) {
-        state = state.copy(fechaSeleccionada = fecha)
+    private fun aplicarFiltros() {
+        var lista = state.ventas
+        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
-        if (fecha == null) {
-            // Mostrar todas las ventas
-            state = state.copy(ventasFiltradas = state.ventas)
-        } else {
-            // Filtrar por fecha específica
-            val ventasDelDia = state.ventas.filter { venta ->
-                val cal = Calendar.getInstance().apply { timeInMillis = venta.fecha }
-                val ventaFecha = "${cal.get(Calendar.DAY_OF_MONTH)}/${cal.get(Calendar.MONTH) + 1}/${cal.get(Calendar.YEAR)}"
-                ventaFecha == fecha
-            }
-            state = state.copy(ventasFiltradas = ventasDelDia)
+        if (filtroFecha != null) {
+            lista = lista.filter { sdf.format(Date(it.fecha)) == filtroFecha }
         }
+        if (filtroVendedor != null) {
+            lista = lista.filter { it.vendedorId == filtroVendedor }
+        }
+
+        state = state.copy(ventasFiltradas = lista, fechaSeleccionada = filtroFecha)
     }
 
-    fun obtenerVendedoresUnicos(): List<Pair<String, String>> {
-        return state.ventas
-            .map { it.vendedorId to it.vendedorNombre }
-            .distinct()
-    }
-
-    fun aumentarStock(productoId: String, cantidadAAgregar: Int) {
-        viewModelScope.launch {
-            val producto = state.productos.find { it.id == productoId }
-            if (producto != null) {
-                val nuevoStock = producto.stock + cantidadAAgregar
-                repository.actualizarStock(productoId, nuevoStock)
-            }
-        }
+    fun aumentarStock(productoId: String, cantidad: Int) {
+        viewModelScope.launch { repository.aumentarStock(productoId, cantidad) }
     }
 }

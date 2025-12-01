@@ -2,15 +2,11 @@ package com.negocio.inventarioollas.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
-import com.negocio.inventarioollas.models.Usuario
-import com.negocio.inventarioollas.models.Producto
-import com.negocio.inventarioollas.models.Venta
+import com.negocio.inventarioollas.models.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import java.util.Calendar  // ⬅️ AGREGAR ESTE IMPORT
-
 
 class FirebaseRepository {
 
@@ -21,7 +17,6 @@ class FirebaseRepository {
     private val usuariosRef = database.getReference("usuarios")
     private val productosRef = database.getReference("productos")
     private val ventasRef = database.getReference("ventas")
-    private val movimientosRef = database.getReference("movimientos_inventario")
 
     // ==================== AUTENTICACIÓN ====================
 
@@ -49,11 +44,24 @@ class FirebaseRepository {
             val result = auth.signInWithEmailAndPassword(email, password).await()
             val userId = result.user?.uid ?: throw Exception("Error al obtener ID de usuario")
 
+            // Usamos la función auxiliar para obtener los datos completos
+            obtenerUsuarioPorId(userId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- ESTA ES LA FUNCIÓN QUE FALTABA Y CAUSABA EL ERROR ---
+    suspend fun obtenerUsuarioPorId(userId: String): Result<Usuario> {
+        return try {
             val snapshot = usuariosRef.child(userId).get().await()
             val usuario = snapshot.getValue(Usuario::class.java)
-                ?: throw Exception("Usuario no encontrado")
 
-            Result.success(usuario)
+            if (usuario != null) {
+                Result.success(usuario)
+            } else {
+                Result.failure(Exception("Usuario no encontrado en la base de datos"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -80,6 +88,15 @@ class FirebaseRepository {
         }
     }
 
+    suspend fun actualizarProducto(producto: Producto): Result<Unit> {
+        return try {
+            productosRef.child(producto.id).setValue(producto).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun obtenerProductos(): Flow<List<Producto>> = callbackFlow {
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -99,9 +116,21 @@ class FirebaseRepository {
         awaitClose { productosRef.removeEventListener(listener) }
     }
 
-    suspend fun actualizarStock(productoId: String, nuevoStock: Int): Result<Unit> {
+    suspend fun aumentarStock(productoId: String, cantidad: Int): Result<Unit> {
         return try {
-            productosRef.child(productoId).child("stock").setValue(nuevoStock).await()
+            val ref = productosRef.child(productoId).child("stock")
+            val snapshot = ref.get().await()
+            val stockActual = snapshot.getValue(Int::class.java) ?: 0
+            ref.setValue(stockActual + cantidad).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun eliminarProducto(productoId: String): Result<Unit> {
+        return try {
+            productosRef.child(productoId).removeValue().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -115,6 +144,16 @@ class FirebaseRepository {
             val ventaId = ventasRef.push().key ?: throw Exception("Error al generar ID")
             venta.id = ventaId
             ventasRef.child(ventaId).setValue(venta).await()
+
+            // Descontar stock
+            venta.productos.values.forEach { item ->
+                val productoRef = productosRef.child(item.productoId).child("stock")
+                val snapshot = productoRef.get().await()
+                val stockActual = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoStock = stockActual - item.cantidad
+                productoRef.setValue(if (nuevoStock < 0) 0 else nuevoStock)
+            }
+
             Result.success(ventaId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -159,81 +198,32 @@ class FirebaseRepository {
 
         query.addValueEventListener(listener)
         awaitClose { query.removeEventListener(listener) }
+
+
     }
+    // ... (el resto de tu código arriba)
 
-    suspend fun obtenerUsuarioPorId(userId: String): Result<Usuario> {
+    // ==================== CONFIGURACIÓN NEGOCIO ====================
+
+    private val configRef = database.getReference("configuracion")
+
+    suspend fun guardarDatosNegocio(datos: DatosNegocio): Result<Unit> {
         return try {
-            val snapshot = usuariosRef.child(userId).get().await()
-            val usuario = snapshot.getValue(Usuario::class.java)
-                ?: throw Exception("Usuario no encontrado")
-            Result.success(usuario)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-    // Eliminar ventas más antiguas de 30 días
-    suspend fun eliminarVentasAntiguas(): Result<Int> {
-        return try {
-            val treintaDiasAtras = Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_YEAR, -30)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-
-            val snapshot = ventasRef.get().await()
-            var eliminadas = 0
-
-            snapshot.children.forEach { ventaSnapshot ->
-                val fecha = ventaSnapshot.child("fecha").getValue(Long::class.java) ?: 0L
-                if (fecha < treintaDiasAtras) {
-                    ventaSnapshot.ref.removeValue().await()
-                    eliminadas++
-                }
-            }
-
-            Result.success(eliminadas)
+            configRef.setValue(datos).await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    // Obtener ventas de los últimos 30 días
-    fun obtenerVentasUltimoMes(): Flow<List<Venta>> = callbackFlow {
-        val treintaDiasAtras = Calendar.getInstance().apply {
-            add(Calendar.DAY_OF_YEAR, -30)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val ventas = mutableListOf<Venta>()
-
-                snapshot.children.forEach { ventaSnapshot ->
-                    val venta = ventaSnapshot.getValue(Venta::class.java)
-                    if (venta != null && venta.fecha >= treintaDiasAtras) {
-                        venta.id = ventaSnapshot.key ?: ""
-                        ventas.add(venta)
-                    }
-                }
-
-                // Ordenar por fecha descendente (más reciente primero)
-                ventas.sortByDescending { it.fecha }
-                trySend(ventas)
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                close(error.toException())
-            }
+    suspend fun obtenerDatosNegocio(): Result<DatosNegocio> {
+        return try {
+            val snapshot = configRef.get().await()
+            val datos = snapshot.getValue(DatosNegocio::class.java) ?: DatosNegocio()
+            Result.success(datos)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-
-        ventasRef.addValueEventListener(listener)
-        awaitClose { ventasRef.removeEventListener(listener) }
     }
-
-
 }
+// Fin de la clase FirebaseRepository

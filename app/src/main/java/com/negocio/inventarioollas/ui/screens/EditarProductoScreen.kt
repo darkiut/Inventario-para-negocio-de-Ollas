@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -18,23 +17,24 @@ import com.negocio.inventarioollas.viewmodels.ProductoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgregarProductoScreen(
+fun EditarProductoScreen(
     onNavigateBack: () -> Unit,
     productoViewModel: ProductoViewModel = viewModel()
 ) {
     val state = productoViewModel.state
 
-    // Limpiamos el formulario al entrar a la pantalla
-    LaunchedEffect(Unit) {
-        productoViewModel.limpiarFormulario()
-    }
+    // No limpiamos el formulario al entrar aquí porque
+    // HomeVendedorScreen ya configuró los datos con "seleccionarProductoParaEditar"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Nuevo Producto") },
+                title = { Text("Editar Producto") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        productoViewModel.cancelarEdicion()
+                        onNavigateBack()
+                    }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
                     }
                 },
@@ -55,7 +55,6 @@ fun AgregarProductoScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Mensajes de error o éxito
             if (state.error != null) {
                 Text(
                     text = state.error,
@@ -122,7 +121,6 @@ fun AgregarProductoScreen(
 
             Button(
                 onClick = {
-                    // Usamos guardarProducto y pasamos la navegación como callback
                     productoViewModel.guardarProducto {
                         onNavigateBack()
                     }
@@ -138,7 +136,7 @@ fun AgregarProductoScreen(
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
-                    Text("Guardar Producto")
+                    Text("Guardar Cambios")
                 }
             }
         }

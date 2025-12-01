@@ -11,147 +11,129 @@ import kotlinx.coroutines.launch
 
 data class ProductoState(
     val productos: List<Producto> = emptyList(),
+    val productosFiltrados: List<Producto> = emptyList(), // LISTA PARA MOSTRAR
     val isLoading: Boolean = false,
     val error: String? = null,
     val successMessage: String? = null
 )
 
 class ProductoViewModel : ViewModel() {
-
     private val repository = FirebaseRepository()
 
     var state by mutableStateOf(ProductoState())
         private set
 
-    // Campos para agregar producto
+    // Variable para el texto del buscador
+    var searchQuery by mutableStateOf("")
+
+    // Variables del formulario
     var nombre by mutableStateOf("")
-        private set
     var codigo by mutableStateOf("")
-        private set
     var stock by mutableStateOf("")
-        private set
     var precioUnitario by mutableStateOf("")
-        private set
     var categoria by mutableStateOf("")
-        private set
     var descripcion by mutableStateOf("")
-        private set
 
-    // No cargar productos automáticamente en init
-    // Se cargarán solo después de iniciar sesión
+    var productoAEditar: Producto? = null
 
-    fun onNombreChange(value: String) { nombre = value }
-    fun onCodigoChange(value: String) { codigo = value }
-    fun onStockChange(value: String) { stock = value }
-    fun onPrecioChange(value: String) { precioUnitario = value }
-    fun onCategoriaChange(value: String) { categoria = value }
-    fun onDescripcionChange(value: String) { descripcion = value }
-
-    // Función para inicializar productos manualmente
     fun inicializarProductos() {
-        if (state.productos.isEmpty()) {
-            cargarProductos()
-        }
-    }
-
-    private fun cargarProductos() {
         viewModelScope.launch {
-            try {
-                repository.obtenerProductos().collect { productos ->
-                    state = state.copy(productos = productos, isLoading = false)
-                }
-            } catch (e: Exception) {
+            state = state.copy(isLoading = true)
+            repository.obtenerProductos().collect { lista ->
                 state = state.copy(
-                    isLoading = false,
-                    error = "Error al cargar productos: ${e.message}"
+                    productos = lista,
+                    productosFiltrados = lista, // Al inicio mostramos todo
+                    isLoading = false
                 )
+                // Si había una búsqueda activa, volvemos a filtrar
+                if (searchQuery.isNotEmpty()) onSearchQueryChange(searchQuery)
             }
         }
     }
 
-    fun agregarProducto(onSuccess: () -> Unit) {
-        // Validaciones
-        if (nombre.isBlank()) {
-            state = state.copy(error = "El nombre es requerido")
-            return
-        }
-
-        if (codigo.isBlank()) {
-            state = state.copy(error = "El código es requerido")
-            return
-        }
-
-        val stockInt = stock.toIntOrNull()
-        if (stockInt == null || stockInt < 0) {
-            state = state.copy(error = "Stock inválido")
-            return
-        }
-
-        val precioDouble = precioUnitario.toDoubleOrNull()
-        if (precioDouble == null || precioDouble <= 0) {
-            state = state.copy(error = "Precio inválido")
-            return
-        }
-
-        state = state.copy(isLoading = true, error = null)
-
-        val producto = Producto(
-            nombre = nombre,
-            codigo = codigo,
-            stock = stockInt,
-            precioUnitario = precioDouble,
-            categoria = categoria,
-            descripcion = descripcion
-        )
-
-        viewModelScope.launch {
-            val result = repository.agregarProducto(producto)
-
-            result.onSuccess {
-                state = state.copy(
-                    isLoading = false,
-                    successMessage = "Producto agregado correctamente"
-                )
-                limpiarCampos()
-                onSuccess()
-            }.onFailure { error ->
-                state = state.copy(
-                    isLoading = false,
-                    error = error.message ?: "Error al agregar producto"
-                )
+    // --- NUEVA FUNCIÓN DE BÚSQUEDA ---
+    fun onSearchQueryChange(query: String) {
+        searchQuery = query
+        if (query.isBlank()) {
+            state = state.copy(productosFiltrados = state.productos)
+        } else {
+            val filtrados = state.productos.filter {
+                it.nombre.contains(query, ignoreCase = true) ||
+                        it.codigo.contains(query, ignoreCase = true)
             }
+            state = state.copy(productosFiltrados = filtrados)
         }
     }
 
+    fun seleccionarProductoParaEditar(producto: Producto) {
+        productoAEditar = producto
+        nombre = producto.nombre
+        codigo = producto.codigo
+        stock = producto.stock.toString()
+        precioUnitario = producto.precioUnitario.toString()
+        categoria = producto.categoria
+        descripcion = producto.descripcion
+    }
 
-    fun limpiarCampos() {
+    fun limpiarFormulario() {
+        productoAEditar = null
         nombre = ""
         codigo = ""
         stock = ""
         precioUnitario = ""
         categoria = ""
         descripcion = ""
-    }
-
-    fun limpiarMensajes() {
         state = state.copy(error = null, successMessage = null)
     }
 
-    fun actualizarStock(productoId: String, nuevoStock: Int) {
-        viewModelScope.launch {
-            repository.actualizarStock(productoId, nuevoStock)
+    fun guardarProducto(onSuccess: () -> Unit) {
+        val nombreVal = nombre.trim()
+        val codigoVal = codigo.trim()
+        val stockVal = stock.toIntOrNull()
+        val precioVal = precioUnitario.toDoubleOrNull()
+
+        if (nombreVal.isEmpty() || codigoVal.isEmpty() || stockVal == null || precioVal == null) {
+            state = state.copy(error = "Por favor completa todos los campos correctamente")
+            return
         }
-    }
-    fun aumentarStock(productoId: String, cantidadAAgregar: Int) {
+
         viewModelScope.launch {
-            // Obtener el producto actual
-            val producto = state.productos.find { it.id == productoId }
-            if (producto != null) {
-                val nuevoStock = producto.stock + cantidadAAgregar
-                repository.actualizarStock(productoId, nuevoStock)
+            state = state.copy(isLoading = true, error = null)
+
+            val resultado = if (productoAEditar == null) {
+                val nuevoProducto = Producto(
+                    nombre = nombreVal, codigo = codigoVal, stock = stockVal,
+                    precioUnitario = precioVal, categoria = categoria, descripcion = descripcion
+                )
+                repository.agregarProducto(nuevoProducto)
+            } else {
+                val productoActualizado = productoAEditar!!.copy(
+                    nombre = nombreVal, codigo = codigoVal, stock = stockVal,
+                    precioUnitario = precioVal, categoria = categoria, descripcion = descripcion
+                )
+                repository.actualizarProducto(productoActualizado)
+            }
+
+            if (resultado.isSuccess) {
+                state = state.copy(isLoading = false, successMessage = "Producto guardado correctamente")
+                limpiarFormulario()
+                onSuccess()
+            } else {
+                state = state.copy(isLoading = false, error = "Error: ${resultado.exceptionOrNull()?.message}")
             }
         }
     }
 
+    fun aumentarStock(productoId: String, cantidad: Int) {
+        viewModelScope.launch { repository.aumentarStock(productoId, cantidad) }
+    }
 
+    fun eliminarProducto(productoId: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            val result = repository.eliminarProducto(productoId)
+            if (result.isSuccess) onSuccess()
+        }
+    }
+
+    fun cancelarEdicion() { limpiarFormulario() }
 }
