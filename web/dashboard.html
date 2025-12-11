@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de Ollas - Panel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <div class="sidebar">
+        <div class="logo">
+            <h2>Gestión Ollas</h2>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#" class="active" onclick="showSection('productos')">Productos</a></li>
+                <li><a href="#" onclick="showSection('ventas')">Ventas</a></li>
+            </ul>
+        </nav>
+        <div class="user-info">
+            <span id="userEmail">Usuario</span>
+            <button onclick="logout()" class="btn-logout">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- PRODUCTOS SECTION -->
+        <div id="productosSection" class="section">
+            <div class="header">
+                <h1>Inventario de Productos</h1>
+                <!-- Only Owners can add products ideally, but we'll show it for now -->
+                <button class="btn-primary" onclick="alert('Funcionalidad de agregar producto disponible próximamente en web')">+ Nuevo Producto</button>
+            </div>
+
+            <div class="card">
+                <div class="table-container">
+                    <table id="productosTable">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Código</th>
+                                <th>Stock</th>
+                                <th>Precio</th>
+                                <th>Categoría</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" style="text-align: center;">Cargando productos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- VENTAS SECTION -->
+        <div id="ventasSection" class="section" style="display: none;">
+            <div class="header">
+                <h1>Registro de Ventas</h1>
+            </div>
+
+            <div class="card">
+                <div class="table-container">
+                    <table id="ventasTable">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Vendedor</th>
+                                <th>Total</th>
+                                <th>Detalles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" style="text-align: center;">Cargando ventas...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <script src="js/app.js"></script>
+    <script>
+        // Check auth on load
+        window.onload = function() {
+            checkAuth();
+            initDashboard();
+        }
+    </script>
+</body>
+</html>
