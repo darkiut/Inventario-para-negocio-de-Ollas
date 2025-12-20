@@ -399,18 +399,28 @@ function guardarNuevoProducto(event) {
     const nombre = document.getElementById('prodNombre').value;
     const codigo = document.getElementById('prodCodigo').value;
     const categoria = document.getElementById('prodCategoria').value;
-    const precio = parseFloat(document.getElementById('prodPrecio').value);
-    const stock = parseInt(document.getElementById('prodStock').value);
+    const precioInput = document.getElementById('prodPrecio').value;
+    const stockInput = document.getElementById('prodStock').value;
+
+    // Explicit conversion and validation
+    const precio = parseFloat(precioInput);
+    const stock = parseInt(stockInput);
+
+    if (isNaN(precio) || isNaN(stock)) {
+        alert("Por favor, ingrese valores numéricos válidos para precio y stock.");
+        return;
+    }
 
     const newRef = database.ref('productos').push();
 
+    // Ensure numeric types for Android compatibility
     const producto = {
         id: newRef.key,
         nombre: nombre,
         codigo: codigo,
         categoria: categoria,
-        precioUnitario: precio,
-        stock: stock,
+        precioUnitario: Number(precio), // Double check force number
+        stock: Number(stock), // Double check force number
         fechaIngreso: Date.now()
     };
 
@@ -432,7 +442,10 @@ function abrirModalEditar(producto) {
 function guardarEdicionProducto() {
     const id = document.getElementById('editId').value;
     const nombre = document.getElementById('editNombre').value;
-    const precio = parseFloat(document.getElementById('editPrecio').value);
+    const precioInput = document.getElementById('editPrecio').value;
+
+    // Explicit conversion
+    const precio = parseFloat(precioInput);
 
     if (!nombre || isNaN(precio)) {
         alert("Por favor complete los campos correctamente");
@@ -441,7 +454,7 @@ function guardarEdicionProducto() {
 
     database.ref('productos/' + id).update({
         nombre: nombre,
-        precioUnitario: precio
+        precioUnitario: Number(precio) // Force number type
     }).then(() => {
         alert("Producto actualizado");
         cerrarModal('editarModal');
