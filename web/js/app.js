@@ -119,7 +119,7 @@ function renderProductos(productos) {
         cellStock.innerHTML = `<strong>${stock}</strong>`;
 
         const cellPrecio = document.createElement("td");
-        cellPrecio.textContent = `S/ ${parseFloat(producto.precioUnitario).toFixed(2)}`;
+        cellPrecio.textContent = `S/ ${parseFloat(producto.precio).toFixed(2)}`;
 
         const cellCategoria = document.createElement("td");
         cellCategoria.textContent = producto.categoria;
@@ -326,7 +326,7 @@ function imprimirVenta(venta, modo) {
             tdCant.textContent = item.cantidad;
 
             const tdPrice = document.createElement('td');
-            tdPrice.textContent = `S/ ${parseFloat(item.precioUnitario).toFixed(2)}`;
+            tdPrice.textContent = `S/ ${parseFloat(item.precioUnitario || item.precio).toFixed(2)}`;
 
             const tdSub = document.createElement('td');
             tdSub.textContent = `S/ ${parseFloat(item.subtotal).toFixed(2)}`;
@@ -419,7 +419,8 @@ function guardarNuevoProducto(event) {
         nombre: nombre,
         codigo: codigo,
         categoria: categoria,
-        precioUnitario: Number(precio), // Double check force number
+        precio: Number(precio), // Double check force number
+        urlImagen: "", // Default empty string
         stock: Number(stock), // Double check force number
         fechaIngreso: Date.now()
     };
@@ -435,7 +436,7 @@ function guardarNuevoProducto(event) {
 function abrirModalEditar(producto) {
     document.getElementById('editId').value = producto.id;
     document.getElementById('editNombre').value = producto.nombre;
-    document.getElementById('editPrecio').value = producto.precioUnitario;
+    document.getElementById('editPrecio').value = producto.precio;
     document.getElementById('editarModal').style.display = "block";
 }
 
@@ -454,7 +455,7 @@ function guardarEdicionProducto() {
 
     database.ref('productos/' + id).update({
         nombre: nombre,
-        precioUnitario: Number(precio) // Force number type
+        precio: Number(precio) // Force number type
     }).then(() => {
         alert("Producto actualizado");
         cerrarModal('editarModal');
