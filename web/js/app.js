@@ -256,14 +256,18 @@ function filterVentas() {
 
     if (!window.allVentas) return;
 
-    const filtered = window.allVentas.filter(venta => {
-        const ventaDate = new Date(venta.fecha);
-        const year = ventaDate.getFullYear();
-        const month = String(ventaDate.getMonth() + 1).padStart(2, '0');
-        const day = String(ventaDate.getDate()).padStart(2, '0');
-        const ventaDateStr = `${year}-${month}-${day}`;
+    // Use requested logic with setHours(0,0,0,0) for date comparison
+    let fechaSeleccionada = null;
+    if (dateInput) {
+        // Construct date explicitly to ensure local time match with browser
+        const parts = dateInput.split('-');
+        fechaSeleccionada = new Date(parts[0], parts[1] - 1, parts[2]).setHours(0,0,0,0);
+    }
 
-        const dateMatch = !dateInput || ventaDateStr === dateInput;
+    const filtered = window.allVentas.filter(venta => {
+        const fechaVenta = new Date(venta.fecha).setHours(0,0,0,0);
+
+        const dateMatch = !fechaSeleccionada || fechaVenta === fechaSeleccionada;
         const sellerMatch = !sellerInput || (venta.vendedorNombre && venta.vendedorNombre.toLowerCase().includes(sellerInput));
 
         return dateMatch && sellerMatch;
