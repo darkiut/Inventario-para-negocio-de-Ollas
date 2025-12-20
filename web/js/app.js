@@ -118,8 +118,8 @@ function renderProductos(productos) {
         const cellStock = document.createElement("td");
         cellStock.innerHTML = `<strong>${stock}</strong>`;
 
-        // Anti-NaN Logic: Prioritize precio, fallback to precioUnitario, or 0
-        const precioFinal = producto.precio || producto.precioUnitario || 0;
+        // Anti-NaN Logic: Prioritize precioUnitario, fallback to precio, or 0
+        const precioFinal = producto.precioUnitario || producto.precio || 0;
 
         const cellPrecio = document.createElement("td");
         cellPrecio.textContent = `S/ ${parseFloat(precioFinal).toFixed(2)}`;
@@ -353,7 +353,7 @@ function imprimirVenta(venta, modo) {
             tdCant.textContent = item.cantidad;
 
             const tdPrice = document.createElement('td');
-            tdPrice.textContent = `S/ ${parseFloat(item.precioUnitario || item.precio).toFixed(2)}`;
+            tdPrice.textContent = `S/ ${parseFloat(item.precioUnitario).toFixed(2)}`;
 
             const tdSub = document.createElement('td');
             tdSub.textContent = `S/ ${parseFloat(item.subtotal).toFixed(2)}`;
@@ -446,7 +446,7 @@ function guardarNuevoProducto(event) {
         nombre: nombre,
         codigo: codigo,
         categoria: categoria,
-        precio: Number(precio), // Double check force number
+        precioUnitario: Number(precio), // Double check force number
         urlImagen: "", // Default empty string
         stock: Number(stock), // Double check force number
         fechaIngreso: Date.now()
@@ -464,7 +464,7 @@ function abrirModalEditar(producto) {
     document.getElementById('editId').value = producto.id;
     document.getElementById('editNombre').value = producto.nombre;
     // Anti-NaN Logic for edit modal as well
-    document.getElementById('editPrecio').value = producto.precio || producto.precioUnitario || 0;
+    document.getElementById('editPrecio').value = producto.precioUnitario || producto.precio || 0;
     document.getElementById('editStock').value = producto.stock || 0;
     document.getElementById('editarModal').style.display = "block";
 }
@@ -486,9 +486,8 @@ function guardarEdicionProducto() {
 
     database.ref('productos/' + id).update({
         nombre: nombre,
-        precio: Number(precio), // Force number type
-        stock: Number(stock), // Force number type
-        precioUnitario: null // Migration: Remove old field if it exists
+        precioUnitario: Number(precio), // Force number type
+        stock: Number(stock) // Force number type
     }).then(() => {
         alert("Producto actualizado");
         cerrarModal('editarModal');
