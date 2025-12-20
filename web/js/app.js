@@ -76,55 +76,86 @@ function loadProductos() {
     if (!tableBody) return;
 
     database.ref('productos').on('value', (snapshot) => {
-        tableBody.innerHTML = "";
-        const data = snapshot.val();
+        // Save globally for search
+        window.allProductos = snapshot.val() ? Object.values(snapshot.val()) : [];
+        renderProductos(window.allProductos);
+    });
+}
 
-        if (!data) {
-            tableBody.innerHTML = "<tr><td colspan='5' style='text-align: center;'>No hay productos registrados.</td></tr>";
-            return;
+function renderProductos(productos) {
+    const tableBody = document.querySelector("#productosTable tbody");
+    if (!tableBody) return;
+    tableBody.innerHTML = "";
+
+    if (!productos || productos.length === 0) {
+        tableBody.innerHTML = "<tr><td colspan='6' style='text-align: center;'>No hay productos registrados.</td></tr>";
+        return;
+    }
+
+    productos.forEach(producto => {
+        const stock = producto.stock;
+        let stockClass = "";
+
+        // Semáforo Logic
+        if (stock <= 5) {
+            stockClass = "stock-critical";
+        } else if (stock >= 6 && stock <= 15) {
+            stockClass = "stock-warning";
+        } else {
+            stockClass = "stock-good";
         }
 
-        Object.values(data).forEach(producto => {
-            const stock = producto.stock;
-            let stockClass = "";
+        const row = document.createElement("tr");
+        row.className = stockClass;
 
-            // Semáforo Logic
-            if (stock <= 5) { // Updated to include 5 in critical
-                stockClass = "stock-critical";
-            } else if (stock >= 6 && stock <= 15) {
-                stockClass = "stock-warning";
-            } else {
-                stockClass = "stock-good";
-            }
+        // Safe DOM creation
+        const cellNombre = document.createElement("td");
+        cellNombre.textContent = producto.nombre;
 
-            const row = document.createElement("tr");
-            row.className = stockClass; // Apply row color
+        const cellCodigo = document.createElement("td");
+        cellCodigo.textContent = producto.codigo;
 
-            // Safe DOM creation to prevent XSS
-            const cellNombre = document.createElement("td");
-            cellNombre.textContent = producto.nombre;
+        const cellStock = document.createElement("td");
+        cellStock.innerHTML = `<strong>${stock}</strong>`;
 
-            const cellCodigo = document.createElement("td");
-            cellCodigo.textContent = producto.codigo;
+        const cellPrecio = document.createElement("td");
+        cellPrecio.textContent = `S/ ${parseFloat(producto.precioUnitario).toFixed(2)}`;
 
-            const cellStock = document.createElement("td");
-            cellStock.innerHTML = `<strong>${stock}</strong>`;
+        const cellCategoria = document.createElement("td");
+        cellCategoria.textContent = producto.categoria;
 
-            const cellPrecio = document.createElement("td");
-            cellPrecio.textContent = `S/ ${parseFloat(producto.precioUnitario).toFixed(2)}`;
+        const cellAcciones = document.createElement("td");
+        // Serialize safely
+        const prodJson = JSON.stringify(producto).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-            const cellCategoria = document.createElement("td");
-            cellCategoria.textContent = producto.categoria;
+        cellAcciones.innerHTML = `
+            <button class="btn-edit" onclick="abrirModalEditar(${prodJson})">Editar</button>
+            <button class="btn-stock" onclick="abrirModalStock(${prodJson})">Ajuste (+/-)</button>
+        `;
 
-            row.appendChild(cellNombre);
-            row.appendChild(cellCodigo);
-            row.appendChild(cellStock);
-            row.appendChild(cellPrecio);
-            row.appendChild(cellCategoria);
+        row.appendChild(cellNombre);
+        row.appendChild(cellCodigo);
+        row.appendChild(cellStock);
+        row.appendChild(cellPrecio);
+        row.appendChild(cellCategoria);
+        row.appendChild(cellAcciones);
 
-            tableBody.appendChild(row);
-        });
+        tableBody.appendChild(row);
     });
+}
+
+function filterProductos() {
+    const search = document.getElementById('searchProduct').value.toLowerCase();
+
+    if (!window.allProductos) return;
+
+    const filtered = window.allProductos.filter(prod => {
+        const nombre = (prod.nombre || "").toLowerCase();
+        const categoria = (prod.categoria || "").toLowerCase();
+        return nombre.includes(search) || categoria.includes(search);
+    });
+
+    renderProductos(filtered);
 }
 
 function loadVentas() {
@@ -351,8 +382,115 @@ function verDetallePicking(venta) {
     modal.style.display = "block";
 }
 
-function cerrarModal() {
-    document.getElementById('pickingModal').style.display = "none";
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = "none";
+}
+
+// --- Product Logic ---
+
+function abrirModalProducto() {
+    document.getElementById('productoForm').reset();
+    document.getElementById('productoModal').style.display = "block";
+}
+
+function guardarNuevoProducto(event) {
+    event.preventDefault();
+
+    const nombre = document.getElementById('prodNombre').value;
+    const codigo = document.getElementById('prodCodigo').value;
+    const categoria = document.getElementById('prodCategoria').value;
+    const precio = parseFloat(document.getElementById('prodPrecio').value);
+    const stock = parseInt(document.getElementById('prodStock').value);
+
+    const newRef = database.ref('productos').push();
+
+    const producto = {
+        id: newRef.key,
+        nombre: nombre,
+        codigo: codigo,
+        categoria: categoria,
+        precioUnitario: precio,
+        stock: stock,
+        fechaIngreso: Date.now()
+    };
+
+    newRef.set(producto).then(() => {
+        alert("Producto creado exitosamente");
+        cerrarModal('productoModal');
+    }).catch(error => {
+        alert("Error al crear producto: " + error.message);
+    });
+}
+
+function abrirModalEditar(producto) {
+    document.getElementById('editId').value = producto.id;
+    document.getElementById('editNombre').value = producto.nombre;
+    document.getElementById('editPrecio').value = producto.precioUnitario;
+    document.getElementById('editarModal').style.display = "block";
+}
+
+function guardarEdicionProducto() {
+    const id = document.getElementById('editId').value;
+    const nombre = document.getElementById('editNombre').value;
+    const precio = parseFloat(document.getElementById('editPrecio').value);
+
+    if (!nombre || isNaN(precio)) {
+        alert("Por favor complete los campos correctamente");
+        return;
+    }
+
+    database.ref('productos/' + id).update({
+        nombre: nombre,
+        precioUnitario: precio
+    }).then(() => {
+        alert("Producto actualizado");
+        cerrarModal('editarModal');
+    }).catch(error => {
+        alert("Error: " + error.message);
+    });
+}
+
+function abrirModalStock(producto) {
+    document.getElementById('stockId').value = producto.id;
+    document.getElementById('stockProdName').textContent = producto.nombre;
+    document.getElementById('stockActualDisplay').textContent = producto.stock;
+    document.getElementById('stockCantidad').value = 1;
+    document.getElementById('stockModal').style.display = "block";
+}
+
+function aplicarStock(multiplicador) {
+    const id = document.getElementById('stockId').value;
+    const cantidadInput = parseInt(document.getElementById('stockCantidad').value);
+
+    if (isNaN(cantidadInput) || cantidadInput <= 0) {
+        alert("Ingrese una cantidad válida");
+        return;
+    }
+
+    const cambio = cantidadInput * multiplicador;
+
+    // Check current stock logic
+    database.ref('productos/' + id + '/stock').transaction((currentStock) => {
+        if (currentStock === null) return 0; // If doesn't exist, assume 0
+
+        const newStock = (currentStock || 0) + cambio;
+
+        if (newStock < 0) {
+            // Cancel transaction if stock would be negative
+            return; // Abort
+        }
+
+        return newStock;
+    }, (error, committed, snapshot) => {
+        if (error) {
+            alert("Error al actualizar stock: " + error.message);
+        } else if (!committed) {
+            alert("No se pudo realizar el ajuste. Verifique que no resulte en stock negativo.");
+        } else {
+            alert("Stock actualizado correctamente.");
+            cerrarModal('stockModal');
+        }
+    });
 }
 
 function exportarReporteDiario() {
