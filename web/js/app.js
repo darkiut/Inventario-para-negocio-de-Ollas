@@ -465,6 +465,7 @@ function abrirModalEditar(producto) {
     document.getElementById('editNombre').value = producto.nombre;
     // Anti-NaN Logic for edit modal as well
     document.getElementById('editPrecio').value = producto.precio || producto.precioUnitario || 0;
+    document.getElementById('editStock').value = producto.stock || 0;
     document.getElementById('editarModal').style.display = "block";
 }
 
@@ -472,11 +473,13 @@ function guardarEdicionProducto() {
     const id = document.getElementById('editId').value;
     const nombre = document.getElementById('editNombre').value;
     const precioInput = document.getElementById('editPrecio').value;
+    const stockInput = document.getElementById('editStock').value;
 
     // Explicit conversion
     const precio = parseFloat(precioInput);
+    const stock = parseInt(stockInput);
 
-    if (!nombre || isNaN(precio)) {
+    if (!nombre || isNaN(precio) || isNaN(stock)) {
         alert("Por favor complete los campos correctamente");
         return;
     }
@@ -484,6 +487,7 @@ function guardarEdicionProducto() {
     database.ref('productos/' + id).update({
         nombre: nombre,
         precio: Number(precio), // Force number type
+        stock: Number(stock), // Force number type
         precioUnitario: null // Migration: Remove old field if it exists
     }).then(() => {
         alert("Producto actualizado");
