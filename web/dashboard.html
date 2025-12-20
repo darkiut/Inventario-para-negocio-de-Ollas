@@ -8,14 +8,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body class="dashboard-body">
-    <div class="sidebar">
+    <!-- Mobile Toggle -->
+    <button id="menuToggle" class="menu-toggle" onclick="toggleSidebar()">☰</button>
+
+    <div class="sidebar" id="sidebar">
         <div class="logo">
             <h2>Gestión Ollas</h2>
         </div>
         <nav>
             <ul>
-                <li><a href="#" class="active" onclick="showSection('productos')">Productos</a></li>
-                <li><a href="#" onclick="showSection('ventas')">Ventas</a></li>
+                <li><a href="#" class="active" onclick="showSection('productos'); toggleSidebar();">Productos</a></li>
+                <li><a href="#" onclick="showSection('ventas'); toggleSidebar();">Ventas</a></li>
             </ul>
         </nav>
         <div class="user-info">
@@ -39,7 +42,7 @@
             </div>
 
             <div class="card">
-                <div class="table-container">
+                <div class="table-responsive">
                     <table id="productosTable">
                         <thead>
                             <tr>
@@ -86,7 +89,7 @@
             </div>
 
             <div class="card">
-                <div class="table-container">
+                <div class="table-responsive">
                     <table id="ventasTable">
                         <thead>
                             <tr>
@@ -205,6 +208,18 @@
         window.onload = function() {
             checkAuth();
             initDashboard();
+        }
+
+        // Sidebar Toggle
+        function toggleSidebar() {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar.style.display === 'flex') {
+                    sidebar.style.display = 'none';
+                } else {
+                    sidebar.style.display = 'flex';
+                }
+            }
         }
     </script>
 </body>

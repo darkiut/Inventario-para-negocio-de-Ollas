@@ -103,12 +103,28 @@ input:focus {
     height: 100vh;
 }
 
+.menu-toggle {
+    display: none; /* Hidden on desktop */
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    background: #333;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-size: 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
 .sidebar {
     width: 250px;
     background-color: #263238;
     color: white;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
 .logo {
@@ -184,13 +200,15 @@ input:focus {
     padding: 1rem;
 }
 
-.table-container {
+.table-responsive {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
+    min-width: 600px; /* Ensure table scrolls on small screens */
 }
 
 th, td {
@@ -425,5 +443,61 @@ tr:hover {
         text-align: right;
         font-size: 1.2rem;
         font-weight: bold;
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .dashboard-body {
+        flex-direction: column;
+    }
+
+    .menu-toggle {
+        display: block;
+    }
+
+    .sidebar {
+        display: none; /* Hidden by default */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1000;
+        padding-top: 60px; /* Space for toggle */
+    }
+
+    .main-content {
+        padding: 1rem;
+        margin-top: 50px; /* Space for toggle bar area */
+    }
+
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .header .btn-primary {
+        width: 100%;
+    }
+
+    .filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .card {
+        padding: 0.5rem;
+    }
+
+    /* Make total card full width */
+    #totalVentasDiaDisplay {
+        font-size: 2rem !important;
     }
 }
