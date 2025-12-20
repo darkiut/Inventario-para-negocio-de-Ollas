@@ -118,8 +118,11 @@ function renderProductos(productos) {
         const cellStock = document.createElement("td");
         cellStock.innerHTML = `<strong>${stock}</strong>`;
 
+        // Anti-NaN Logic: Prioritize precio, fallback to precioUnitario, or 0
+        const precioFinal = producto.precio || producto.precioUnitario || 0;
+
         const cellPrecio = document.createElement("td");
-        cellPrecio.textContent = `S/ ${parseFloat(producto.precio).toFixed(2)}`;
+        cellPrecio.textContent = `S/ ${parseFloat(precioFinal).toFixed(2)}`;
 
         const cellCategoria = document.createElement("td");
         cellCategoria.textContent = producto.categoria;
@@ -460,7 +463,8 @@ function guardarNuevoProducto(event) {
 function abrirModalEditar(producto) {
     document.getElementById('editId').value = producto.id;
     document.getElementById('editNombre').value = producto.nombre;
-    document.getElementById('editPrecio').value = producto.precio;
+    // Anti-NaN Logic for edit modal as well
+    document.getElementById('editPrecio').value = producto.precio || producto.precioUnitario || 0;
     document.getElementById('editarModal').style.display = "block";
 }
 
@@ -479,7 +483,8 @@ function guardarEdicionProducto() {
 
     database.ref('productos/' + id).update({
         nombre: nombre,
-        precio: Number(precio) // Force number type
+        precio: Number(precio), // Force number type
+        precioUnitario: null // Migration: Remove old field if it exists
     }).then(() => {
         alert("Producto actualizado");
         cerrarModal('editarModal');
