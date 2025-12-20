@@ -162,11 +162,24 @@ function loadVentas() {
     const tableBody = document.querySelector("#ventasTable tbody");
     if (!tableBody) return;
 
+    // Set default date to today
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const filterDateInput = document.getElementById('filterDate');
+    if (filterDateInput && !filterDateInput.value) {
+        filterDateInput.value = todayStr;
+    }
+
     // Listen to changes in real-time
     database.ref('ventas').limitToLast(100).on('value', (snapshot) => {
         // Save data globally for filtering
         window.allVentas = snapshot.val() ? Object.values(snapshot.val()) : [];
-        renderVentas(window.allVentas);
+        // Apply filter immediately (which defaults to today)
+        filterVentas();
     });
 }
 
@@ -179,6 +192,13 @@ function renderVentas(ventas) {
     if (!ventas || ventas.length === 0) {
         tableBody.innerHTML = "<tr><td colspan='5' style='text-align: center;'>No hay ventas registradas.</td></tr>";
         return;
+    }
+
+    // Calculate total for displayed sales
+    const totalVentas = ventas.reduce((sum, venta) => sum + parseFloat(venta.total || 0), 0);
+    const totalDisplay = document.getElementById('totalVentasDiaDisplay');
+    if (totalDisplay) {
+        totalDisplay.textContent = `S/ ${totalVentas.toFixed(2)}`;
     }
 
     // Sort by date descending
