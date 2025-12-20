@@ -14,6 +14,20 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const database = firebase.database();
 
+let datosNegocio = {
+    nombre: "Mi Negocio",
+    ruc: "20123456789",
+    direccion: "Av. Principal 123",
+    telefono: "555-1234"
+};
+
+// Fetch Datos Negocio
+database.ref('configuracion').once('value').then(snapshot => {
+    if (snapshot.exists()) {
+        datosNegocio = snapshot.val();
+    }
+});
+
 // --- Auth Functions ---
 
 function login(email, password) {
@@ -170,7 +184,9 @@ function renderVentas(ventas) {
         const cellAcciones = document.createElement("td");
         cellAcciones.innerHTML = `
             <a href="${waLink}" target="_blank" class="btn-whatsapp">WhatsApp</a>
-            <button onclick="imprimirVenta(${ventaJson})" class="btn-print">Imprimir</button>
+            <button onclick="imprimirVenta(${ventaJson}, 'a4')" class="btn-print">Imprimir A4</button>
+            <button onclick="imprimirVenta(${ventaJson}, 'ticket')" class="btn-print">Imprimir Ticket</button>
+            <button onclick="verDetallePicking(${ventaJson})" class="btn-detail">Ver Detalle</button>
         `;
 
         row.appendChild(cellDate);
@@ -205,12 +221,18 @@ function filterVentas() {
     renderVentas(filtered);
 }
 
-function imprimirVenta(venta) {
+function imprimirVenta(venta, modo) {
     const printableArea = document.getElementById('printableArea');
     const dateStr = new Date(venta.fecha).toLocaleString();
+    const tituloDoc = (venta.tipoDocumento || "Nota de Pedido").toUpperCase().replace('_', ' ');
 
     // Clear previous content
     printableArea.innerHTML = '';
+
+    // Remove previous print classes
+    document.body.classList.remove('print-a4', 'print-ticket');
+    // Add current print class
+    document.body.classList.add(modo === 'ticket' ? 'print-ticket' : 'print-a4');
 
     const invoiceContainer = document.createElement('div');
     invoiceContainer.className = 'invoice-container';
@@ -219,7 +241,11 @@ function imprimirVenta(venta) {
     const header = document.createElement('div');
     header.className = 'invoice-header';
     header.innerHTML = `
-        <h2>NOTA DE PEDIDO</h2>
+        <h3>${datosNegocio.nombre}</h3>
+        <p>${datosNegocio.direccion}</p>
+        <p>RUC: ${datosNegocio.ruc} | Telf: ${datosNegocio.telefono}</p>
+        <hr style="margin: 0.5rem 0;">
+        <h2>${tituloDoc}</h2>
         <p>Fecha: ${dateStr}</p>
         <p>Nro: ${venta.id ? venta.id.substring(1, 8).toUpperCase() : '---'}</p>
     `;
@@ -306,8 +332,64 @@ function imprimirVenta(venta) {
     window.print();
 }
 
-function verDetalleVenta(ventaId) {
-    alert("Detalle de venta: " + ventaId + "\n(Implementación de modal pendiente)");
+function verDetallePicking(venta) {
+    const modal = document.getElementById('pickingModal');
+    const content = document.getElementById('pickingContent');
+    content.innerHTML = ''; // Clear
+
+    if (venta.productos) {
+        Object.values(venta.productos).forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'picking-item';
+            div.innerHTML = `<strong>${item.cantidad} x</strong> ${item.nombre}`;
+            content.appendChild(div);
+        });
+    } else {
+        content.textContent = "No hay productos en esta venta.";
+    }
+
+    modal.style.display = "block";
+}
+
+function cerrarModal() {
+    document.getElementById('pickingModal').style.display = "none";
+}
+
+function exportarReporteDiario() {
+    if (!window.allVentas || window.allVentas.length === 0) {
+        alert("No hay ventas para exportar.");
+        return;
+    }
+
+    // Filter today's sales
+    const todayStr = new Date().toLocaleDateString();
+
+    const dailySales = window.allVentas.filter(venta => {
+        return new Date(venta.fecha).toLocaleDateString() === todayStr;
+    });
+
+    if (dailySales.length === 0) {
+        alert("No hay ventas registradas el día de hoy.");
+        return;
+    }
+
+    // Map to export format
+    const dataToExport = dailySales.map(v => ({
+        "Fecha": new Date(v.fecha).toLocaleString(),
+        "Tipo Comprobante": (v.tipoDocumento || "Boleta").toUpperCase(),
+        "Cliente": v.clienteNombre || "General",
+        "RUC/DNI": v.clienteDni || v.clienteRuc || "-",
+        "Total": parseFloat(v.total).toFixed(2),
+        "Vendedor": v.vendedorNombre || "-"
+    }));
+
+    // Create Sheet
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ventas Diario");
+
+    // Export
+    XLSX.writeFile(wb, `Reporte_Contable_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
 // --- Login Page Logic ---

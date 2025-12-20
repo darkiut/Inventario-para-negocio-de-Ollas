@@ -262,6 +262,63 @@ tr:hover {
     border-radius: 4px;
     font-size: 0.8rem;
     cursor: pointer;
+    margin-right: 5px;
+}
+
+.btn-detail {
+    background-color: #ff9800;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 2rem;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 8px;
+    position: relative;
+}
+
+.close-modal {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: black;
+}
+
+.picking-item {
+    font-size: 1.5rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.picking-item strong {
+    color: var(--primary-color);
+    font-size: 1.8rem;
 }
 
 /* Print View - Hidden by default */
@@ -284,44 +341,63 @@ tr:hover {
         position: absolute;
         left: 0;
         top: 0;
-        width: 100%;
         background-color: white;
-        padding: 2rem;
     }
 
-    .sidebar, .main-content, .filters {
+    .sidebar, .main-content, .filters, .modal {
         display: none !important;
         margin: 0;
         padding: 0;
     }
 
-    /* Reset print layout */
-    .invoice-container {
-        max-width: 800px;
+    /* A4 Style */
+    .print-a4 .invoice-container {
+        width: 100%;
+        max-width: 210mm; /* A4 width */
         margin: 0 auto;
         border: 1px solid #eee;
-        padding: 2rem;
+        padding: 20mm;
+    }
+
+    /* Ticket 80mm Style */
+    .print-ticket .invoice-container {
+        width: 80mm;
+        margin: 0;
+        padding: 5mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+        border: none;
     }
 
     .invoice-header {
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .print-ticket .invoice-header h2 {
+        font-size: 1.2rem;
     }
 
     .invoice-details {
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
 
     .invoice-items {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
 
     .invoice-items th, .invoice-items td {
         border-bottom: 1px solid #ddd;
         padding: 0.5rem;
         text-align: left;
+    }
+
+    /* Compact table for ticket */
+    .print-ticket .invoice-items th, .print-ticket .invoice-items td {
+        padding: 2px;
+        font-size: 0.9em;
     }
 
     .invoice-total {
