@@ -207,3 +207,126 @@ th {
 tr:hover {
     background-color: #f9f9f9;
 }
+
+/* Stock Traffic Light */
+.stock-critical {
+    background-color: #ffcdd2 !important; /* Red */
+    color: #b71c1c;
+}
+
+.stock-warning {
+    background-color: #fff9c4 !important; /* Yellow */
+    color: #f57f17;
+}
+
+.stock-good {
+    background-color: #c8e6c9 !important; /* Green */
+    color: #1b5e20;
+}
+
+/* Filters */
+.filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-group input {
+    padding: 0.5rem;
+}
+
+/* Action Buttons */
+.btn-whatsapp {
+    background-color: #25D366;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.btn-print {
+    background-color: #607d8b;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+/* Print View - Hidden by default */
+#printableArea {
+    display: none;
+}
+
+/* Print Media Query */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    #printableArea, #printableArea * {
+        visibility: visible;
+    }
+
+    #printableArea {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background-color: white;
+        padding: 2rem;
+    }
+
+    .sidebar, .main-content, .filters {
+        display: none !important;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Reset print layout */
+    .invoice-container {
+        max-width: 800px;
+        margin: 0 auto;
+        border: 1px solid #eee;
+        padding: 2rem;
+    }
+
+    .invoice-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .invoice-details {
+        margin-bottom: 2rem;
+    }
+
+    .invoice-items {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 2rem;
+    }
+
+    .invoice-items th, .invoice-items td {
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+        text-align: left;
+    }
+
+    .invoice-total {
+        text-align: right;
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+}

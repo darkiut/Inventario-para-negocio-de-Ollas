@@ -71,14 +71,43 @@ function loadProductos() {
         }
 
         Object.values(data).forEach(producto => {
+            const stock = producto.stock;
+            let stockClass = "";
+
+            // Semáforo Logic
+            if (stock <= 5) { // Updated to include 5 in critical
+                stockClass = "stock-critical";
+            } else if (stock >= 6 && stock <= 15) {
+                stockClass = "stock-warning";
+            } else {
+                stockClass = "stock-good";
+            }
+
             const row = document.createElement("tr");
-            row.innerHTML = `
-                <td>${producto.nombre}</td>
-                <td>${producto.codigo}</td>
-                <td>${producto.stock}</td>
-                <td>S/ ${parseFloat(producto.precioUnitario).toFixed(2)}</td>
-                <td>${producto.categoria}</td>
-            `;
+            row.className = stockClass; // Apply row color
+
+            // Safe DOM creation to prevent XSS
+            const cellNombre = document.createElement("td");
+            cellNombre.textContent = producto.nombre;
+
+            const cellCodigo = document.createElement("td");
+            cellCodigo.textContent = producto.codigo;
+
+            const cellStock = document.createElement("td");
+            cellStock.innerHTML = `<strong>${stock}</strong>`;
+
+            const cellPrecio = document.createElement("td");
+            cellPrecio.textContent = `S/ ${parseFloat(producto.precioUnitario).toFixed(2)}`;
+
+            const cellCategoria = document.createElement("td");
+            cellCategoria.textContent = producto.categoria;
+
+            row.appendChild(cellNombre);
+            row.appendChild(cellCodigo);
+            row.appendChild(cellStock);
+            row.appendChild(cellPrecio);
+            row.appendChild(cellCategoria);
+
             tableBody.appendChild(row);
         });
     });
@@ -88,31 +117,193 @@ function loadVentas() {
     const tableBody = document.querySelector("#ventasTable tbody");
     if (!tableBody) return;
 
-    database.ref('ventas').limitToLast(50).on('value', (snapshot) => {
-        tableBody.innerHTML = "";
-        const data = snapshot.val();
-
-        if (!data) {
-            tableBody.innerHTML = "<tr><td colspan='5' style='text-align: center;'>No hay ventas registradas.</td></tr>";
-            return;
-        }
-
-        // Convert object to array and sort by date descending
-        const ventas = Object.values(data).sort((a, b) => b.fecha - a.fecha);
-
-        ventas.forEach(venta => {
-            const date = new Date(venta.fecha).toLocaleDateString() + ' ' + new Date(venta.fecha).toLocaleTimeString();
-            const row = document.createElement("tr");
-            row.innerHTML = `
-                <td>${date}</td>
-                <td>${venta.clienteNombre || 'Cliente General'}</td>
-                <td>${venta.vendedorNombre || 'Desconocido'}</td>
-                <td>S/ ${parseFloat(venta.total).toFixed(2)}</td>
-                <td><button onclick="verDetalleVenta('${venta.id}')" style="cursor:pointer; color: blue; text-decoration: underline; background: none; border: none;">Ver</button></td>
-            `;
-            tableBody.appendChild(row);
-        });
+    // Listen to changes in real-time
+    database.ref('ventas').limitToLast(100).on('value', (snapshot) => {
+        // Save data globally for filtering
+        window.allVentas = snapshot.val() ? Object.values(snapshot.val()) : [];
+        renderVentas(window.allVentas);
     });
+}
+
+function renderVentas(ventas) {
+    const tableBody = document.querySelector("#ventasTable tbody");
+    if (!tableBody) return;
+
+    tableBody.innerHTML = "";
+
+    if (!ventas || ventas.length === 0) {
+        tableBody.innerHTML = "<tr><td colspan='5' style='text-align: center;'>No hay ventas registradas.</td></tr>";
+        return;
+    }
+
+    // Sort by date descending
+    const ventasSorted = [...ventas].sort((a, b) => b.fecha - a.fecha);
+
+    ventasSorted.forEach(venta => {
+        const dateObj = new Date(venta.fecha);
+        const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+
+        // WhatsApp Link Construction
+        const cliente = venta.clienteNombre || "Cliente";
+        const mensaje = encodeURIComponent(`Hola ${cliente}, aquí tienes tu nota de pedido de Ollas.`);
+        const telefono = venta.clienteTelefono || "";
+        const waLink = `https://wa.me/${telefono}?text=${mensaje}`;
+
+        // Serialize venta for print function safely
+        const ventaJson = JSON.stringify(venta).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        const row = document.createElement("tr");
+
+        // Safe DOM creation
+        const cellDate = document.createElement("td");
+        cellDate.textContent = dateStr;
+
+        const cellCliente = document.createElement("td");
+        cellCliente.textContent = venta.clienteNombre || 'Cliente General';
+
+        const cellVendedor = document.createElement("td");
+        cellVendedor.textContent = venta.vendedorNombre || 'Desconocido';
+
+        const cellTotal = document.createElement("td");
+        cellTotal.textContent = `S/ ${parseFloat(venta.total).toFixed(2)}`;
+
+        const cellAcciones = document.createElement("td");
+        cellAcciones.innerHTML = `
+            <a href="${waLink}" target="_blank" class="btn-whatsapp">WhatsApp</a>
+            <button onclick="imprimirVenta(${ventaJson})" class="btn-print">Imprimir</button>
+        `;
+
+        row.appendChild(cellDate);
+        row.appendChild(cellCliente);
+        row.appendChild(cellVendedor);
+        row.appendChild(cellTotal);
+        row.appendChild(cellAcciones);
+
+        tableBody.appendChild(row);
+    });
+}
+
+function filterVentas() {
+    const dateInput = document.getElementById('filterDate').value;
+    const sellerInput = document.getElementById('filterSeller').value.toLowerCase();
+
+    if (!window.allVentas) return;
+
+    const filtered = window.allVentas.filter(venta => {
+        const ventaDate = new Date(venta.fecha);
+        const year = ventaDate.getFullYear();
+        const month = String(ventaDate.getMonth() + 1).padStart(2, '0');
+        const day = String(ventaDate.getDate()).padStart(2, '0');
+        const ventaDateStr = `${year}-${month}-${day}`;
+
+        const dateMatch = !dateInput || ventaDateStr === dateInput;
+        const sellerMatch = !sellerInput || (venta.vendedorNombre && venta.vendedorNombre.toLowerCase().includes(sellerInput));
+
+        return dateMatch && sellerMatch;
+    });
+
+    renderVentas(filtered);
+}
+
+function imprimirVenta(venta) {
+    const printableArea = document.getElementById('printableArea');
+    const dateStr = new Date(venta.fecha).toLocaleString();
+
+    // Clear previous content
+    printableArea.innerHTML = '';
+
+    const invoiceContainer = document.createElement('div');
+    invoiceContainer.className = 'invoice-container';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'invoice-header';
+    header.innerHTML = `
+        <h2>NOTA DE PEDIDO</h2>
+        <p>Fecha: ${dateStr}</p>
+        <p>Nro: ${venta.id ? venta.id.substring(1, 8).toUpperCase() : '---'}</p>
+    `;
+
+    // Details (Sanitized)
+    const details = document.createElement('div');
+    details.className = 'invoice-details';
+
+    // Helper to create detail lines safely
+    const createDetail = (label, value) => {
+        const p = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = label + ': ';
+        p.appendChild(strong);
+        p.appendChild(document.createTextNode(value || '-'));
+        return p;
+    };
+
+    details.appendChild(createDetail('Cliente', venta.clienteNombre || 'General'));
+    details.appendChild(createDetail('DNI/RUC', venta.clienteDni || venta.clienteRuc));
+    details.appendChild(createDetail('Dirección', venta.clienteDireccion));
+    details.appendChild(createDetail('Vendedor', venta.vendedorNombre));
+
+    // Table
+    const table = document.createElement('table');
+    table.className = 'invoice-items';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cant.</th>
+                <th>P. Unit.</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+    `;
+
+    const tbody = document.createElement('tbody');
+    if (venta.productos) {
+        Object.values(venta.productos).forEach(item => {
+            const tr = document.createElement('tr');
+
+            const tdNombre = document.createElement('td');
+            tdNombre.textContent = item.nombre;
+
+            const tdCant = document.createElement('td');
+            tdCant.textContent = item.cantidad;
+
+            const tdPrice = document.createElement('td');
+            tdPrice.textContent = `S/ ${parseFloat(item.precioUnitario).toFixed(2)}`;
+
+            const tdSub = document.createElement('td');
+            tdSub.textContent = `S/ ${parseFloat(item.subtotal).toFixed(2)}`;
+
+            tr.appendChild(tdNombre);
+            tr.appendChild(tdCant);
+            tr.appendChild(tdPrice);
+            tr.appendChild(tdSub);
+            tbody.appendChild(tr);
+        });
+    }
+    table.appendChild(tbody);
+
+    // Total
+    const totalDiv = document.createElement('div');
+    totalDiv.className = 'invoice-total';
+    totalDiv.textContent = `TOTAL: S/ ${parseFloat(venta.total).toFixed(2)}`;
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.textAlign = 'center';
+    footer.style.marginTop = '2rem';
+    footer.style.fontSize = '0.8rem';
+    footer.textContent = '¡Gracias por su preferencia!';
+
+    invoiceContainer.appendChild(header);
+    invoiceContainer.appendChild(details);
+    invoiceContainer.appendChild(table);
+    invoiceContainer.appendChild(totalDiv);
+    invoiceContainer.appendChild(footer);
+
+    printableArea.appendChild(invoiceContainer);
+
+    window.print();
 }
 
 function verDetalleVenta(ventaId) {

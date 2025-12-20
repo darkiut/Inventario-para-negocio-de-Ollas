@@ -61,6 +61,17 @@
                 <h1>Registro de Ventas</h1>
             </div>
 
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="filterDate">Día:</label>
+                    <input type="date" id="filterDate" onchange="filterVentas()">
+                </div>
+                <div class="filter-group">
+                    <label for="filterSeller">Vendedor:</label>
+                    <input type="text" id="filterSeller" placeholder="Nombre vendedor" onkeyup="filterVentas()">
+                </div>
+            </div>
+
             <div class="card">
                 <div class="table-container">
                     <table id="ventasTable">
@@ -70,7 +81,7 @@
                                 <th>Cliente</th>
                                 <th>Vendedor</th>
                                 <th>Total</th>
-                                <th>Detalles</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -82,6 +93,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Printable Area -->
+    <div id="printableArea">
+        <!-- Content injected by JS -->
     </div>
 
     <!-- Firebase SDKs -->
