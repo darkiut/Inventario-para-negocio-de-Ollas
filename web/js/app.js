@@ -446,7 +446,7 @@ function guardarNuevoProducto(event) {
         nombre: nombre,
         codigo: codigo,
         categoria: categoria,
-        precioUnitario: Number(precio), // Double check force number
+        precio: Number(precio), // Double check force number
         urlImagen: "", // Default empty string
         stock: Number(stock), // Double check force number
         fechaIngreso: Date.now()
@@ -486,7 +486,7 @@ function guardarEdicionProducto() {
 
     database.ref('productos/' + id).update({
         nombre: nombre,
-        precioUnitario: Number(precio), // Force number type
+        precio: Number(precio), // Force number type
         stock: Number(stock) // Force number type
     }).then(() => {
         alert("Producto actualizado");
