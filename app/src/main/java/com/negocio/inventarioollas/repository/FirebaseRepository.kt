@@ -143,30 +143,17 @@ class FirebaseRepository {
         return try {
             val ventaId = ventasRef.push().key ?: throw Exception("Error al generar ID")
             venta.id = ventaId
+            ventasRef.child(ventaId).setValue(venta).await()
 
-            val updates = HashMap<String, Any>()
-            updates["/ventas/$ventaId"] = venta
-
-            // Descontar stock de manera atómica con la venta
-            // Primero obtenemos el stock actual de todos los productos involucrados
-            // Nota: Esto no es una transacción completa de base de datos, pero asegura que la venta
-            // y las actualizaciones de stock ocurran juntas o fallen juntas en el servidor.
-            // Para mayor seguridad en concurrencia alta, se requeriría una lógica más compleja o Cloud Functions.
-
-            for (item in venta.productos.values) {
-                val productoSnapshot = productosRef.child(item.productoId).get().await()
-                val producto = productoSnapshot.getValue(Producto::class.java)
-                    ?: throw Exception("Producto no encontrado: ${item.nombre}")
-
-                if (producto.stock < item.cantidad) {
-                    throw Exception("Stock insuficiente para ${item.nombre}. Disponible: ${producto.stock}")
-                }
-
-                val nuevoStock = producto.stock - item.cantidad
-                updates["/productos/${item.productoId}/stock"] = nuevoStock
+            // Descontar stock
+            venta.productos.values.forEach { item ->
+                val productoRef = productosRef.child(item.productoId).child("stock")
+                val snapshot = productoRef.get().await()
+                val stockActual = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoStock = stockActual - item.cantidad
+                productoRef.setValue(if (nuevoStock < 0) 0 else nuevoStock)
             }
 
-            database.reference.updateChildren(updates).await()
             Result.success(ventaId)
         } catch (e: Exception) {
             Result.failure(e)
