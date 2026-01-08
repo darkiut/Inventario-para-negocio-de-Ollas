@@ -545,17 +545,32 @@ function exportarReporteDiario() {
         return;
     }
 
-    // Filter today's sales
-    const todayStr = new Date().toLocaleDateString();
+    const dateInput = document.getElementById('filterDate');
+    let fechaSeleccionada = null;
+    let fechaStr = "Hoy";
+
+    if (dateInput && dateInput.value) {
+        const parts = dateInput.value.split('-');
+        // Create date at local midnight
+        fechaSeleccionada = new Date(parts[0], parts[1] - 1, parts[2]).setHours(0,0,0,0);
+        fechaStr = dateInput.value;
+    } else {
+        // Fallback to today if logic fails, though input is usually pre-filled
+        fechaSeleccionada = new Date().setHours(0,0,0,0);
+    }
 
     const dailySales = window.allVentas.filter(venta => {
-        return new Date(venta.fecha).toLocaleDateString() === todayStr;
+        const fechaVenta = new Date(venta.fecha).setHours(0,0,0,0);
+        return fechaVenta === fechaSeleccionada;
     });
 
     if (dailySales.length === 0) {
-        alert("No hay ventas registradas el día de hoy.");
+        alert("No hay ventas registradas para la fecha seleccionada.");
         return;
     }
+
+    // Calculate total
+    const totalDia = dailySales.reduce((sum, v) => sum + parseFloat(v.total || 0), 0);
 
     // Map to export format
     const dataToExport = dailySales.map(v => ({
@@ -567,13 +582,23 @@ function exportarReporteDiario() {
         "Vendedor": v.vendedorNombre || "-"
     }));
 
+    // Add Total Row
+    dataToExport.push({
+        "Fecha": "",
+        "Tipo Comprobante": "",
+        "Cliente": "",
+        "RUC/DNI": "TOTAL DÍA",
+        "Total": totalDia.toFixed(2),
+        "Vendedor": ""
+    });
+
     // Create Sheet
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ventas Diario");
 
     // Export
-    XLSX.writeFile(wb, `Reporte_Contable_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `Reporte_Contable_${fechaStr}.xlsx`);
 }
 
 // --- Login Page Logic ---
