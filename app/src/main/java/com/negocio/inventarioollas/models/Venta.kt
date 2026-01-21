@@ -13,11 +13,12 @@ data class Venta(
     var clienteDni: String = "",
     var clienteRuc: String = "",
     var clienteDireccion: String = "",
-    var productos: Map<String, ItemVenta> = emptyMap()
+    var productos: Map<String, ItemVenta> = emptyMap(),
+    var estado: String = "COMPLETADO" // "COMPLETADO", "CANCELADO"
 ) {
     constructor() : this(
         "", "", "", System.currentTimeMillis(), 0.0,
-        "boleta", "", "", "", "", "", "", emptyMap()
+        "boleta", "", "", "", "", "", "", emptyMap(), "COMPLETADO"
     )
 
     // Método para calcular el total

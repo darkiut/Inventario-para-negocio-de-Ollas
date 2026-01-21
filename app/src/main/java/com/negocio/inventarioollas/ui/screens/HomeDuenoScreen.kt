@@ -22,6 +22,7 @@ import com.negocio.inventarioollas.models.Venta
 import com.negocio.inventarioollas.utils.ExcelGenerator
 import com.negocio.inventarioollas.viewmodels.AuthViewModel
 import com.negocio.inventarioollas.viewmodels.DuenoViewModel
+import com.negocio.inventarioollas.models.ItemVenta
 import com.negocio.inventarioollas.viewmodels.ProductoViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,6 +45,8 @@ fun HomeDuenoScreen(
     var showMenu by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var showFiltroDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var ventaToEdit by remember { mutableStateOf<Venta?>(null) }
     val scope = rememberCoroutineScope()
 
     // Obtenemos el contexto necesario para generar el Excel
@@ -316,7 +319,14 @@ fun HomeDuenoScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(state.ventasFiltradas) { venta ->
-                                    VentaCard(venta = venta)
+                                    VentaCard(
+                                        venta = venta,
+                                        onAnular = { duenoViewModel.anularVenta(venta.id) },
+                                        onEditar = {
+                                            ventaToEdit = venta.copy(productos = venta.productos.toMutableMap())
+                                            showEditDialog = true
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -436,10 +446,79 @@ fun HomeDuenoScreen(
             }
         )
     }
+
+    if (showEditDialog && ventaToEdit != null) {
+        val currentVenta = ventaToEdit!!
+        // Estado local para los productos, para reactividad inmediata
+        var productosMap by remember { mutableStateOf(currentVenta.productos.toMutableMap()) }
+
+        // Calcular total dinámicamente
+        val total = productosMap.values.sumOf { it.subtotal }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Editar Pedido") },
+            text = {
+                Column {
+                    Text("Total actual: S/ ${String.format("%.2f", total)}", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(productosMap.values.toList()) { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.nombre, fontWeight = FontWeight.SemiBold)
+                                    Text("Cant: ${item.cantidad} - S/ ${String.format("%.2f", item.subtotal)}")
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val newMap = productosMap.toMutableMap()
+                                        newMap.remove(item.productoId)
+                                        productosMap = newMap
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red)
+                                }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updatedVenta = currentVenta.copy(
+                            productos = productosMap,
+                            total = total
+                        )
+                        duenoViewModel.actualizarVenta(updatedVenta)
+                        showEditDialog = false
+                    }
+                ) {
+                    Text("Guardar cambios")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun VentaCard(venta: Venta) {
+fun VentaCard(
+    venta: Venta,
+    onAnular: () -> Unit,
+    onEditar: () -> Unit
+) {
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
     val fecha = dateFormat.format(Date(venta.fecha))
 
@@ -449,6 +528,30 @@ fun VentaCard(venta: Venta) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header: Estado y Total
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (venta.estado == "CANCELADO") {
+                    Text(
+                        text = "CANCELADO",
+                        color = Color.Red,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                } else {
+                    Text(
+                        text = "COMPLETADO",
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -512,6 +615,60 @@ fun VentaCard(venta: Venta) {
                         "S/ ${String.format("%.2f", item.subtotal)}",
                         fontSize = 12.sp
                     )
+                }
+            }
+
+            if (venta.estado != "CANCELADO") {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Botón Editar (Azul/Amarillo) - Usaremos Amarillo/Naranja para editar
+                    Button(
+                        onClick = onEditar,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Editar")
+                    }
+
+                    // Botón Anular (Rojo)
+                    var showConfirmAnular by remember { mutableStateOf(false) }
+                    Button(
+                        onClick = { showConfirmAnular = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Anular")
+                    }
+
+                    if (showConfirmAnular) {
+                        AlertDialog(
+                            onDismissRequest = { showConfirmAnular = false },
+                            title = { Text("¿Anular pedido?") },
+                            text = { Text("Esta acción no se puede deshacer. El pedido quedará como CANCELADO.") },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        onAnular()
+                                        showConfirmAnular = false
+                                    }
+                                ) {
+                                    Text("Sí, anular", color = Color.Red)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfirmAnular = false }) {
+                                    Text("Cancelar")
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }

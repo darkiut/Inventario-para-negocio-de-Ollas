@@ -138,4 +138,16 @@ class DuenoViewModel : ViewModel() {
     fun aumentarStock(productoId: String, cantidad: Int) {
         viewModelScope.launch { repository.aumentarStock(productoId, cantidad) }
     }
+
+    fun anularVenta(ventaId: String) {
+        viewModelScope.launch {
+            repository.actualizarEstadoVenta(ventaId, "CANCELADO")
+        }
+    }
+
+    fun actualizarVenta(venta: Venta) {
+        viewModelScope.launch {
+            repository.actualizarVentaProductos(venta.id, venta.productos, venta.total)
+        }
+    }
 }
