@@ -201,6 +201,29 @@ class FirebaseRepository {
 
 
     }
+
+    suspend fun actualizarEstadoVenta(ventaId: String, estado: String): Result<Unit> {
+        return try {
+            ventasRef.child(ventaId).child("estado").setValue(estado).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun actualizarVentaProductos(ventaId: String, productos: Map<String, ItemVenta>, total: Double): Result<Unit> {
+        return try {
+            val updates = mapOf(
+                "productos" to productos,
+                "total" to total
+            )
+            ventasRef.child(ventaId).updateChildren(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ... (el resto de tu código arriba)
 
     // ==================== CONFIGURACIÓN NEGOCIO ====================
