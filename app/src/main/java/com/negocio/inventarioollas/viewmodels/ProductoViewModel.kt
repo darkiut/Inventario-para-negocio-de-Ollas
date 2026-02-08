@@ -7,24 +7,27 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.negocio.inventarioollas.models.Producto
 import com.negocio.inventarioollas.repository.FirebaseRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class ProductoState(
     val productos: List<Producto> = emptyList(),
-    val productosFiltrados: List<Producto> = emptyList(), // LISTA PARA MOSTRAR
+    val productosFiltrados: List<Producto> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val successMessage: String? = null
 )
 
 class ProductoViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    // ✅ Ahora usa el singleton
+    private val repository = FirebaseRepository
 
     var state by mutableStateOf(ProductoState())
         private set
 
-    // Variable para el texto del buscador
     var searchQuery by mutableStateOf("")
+    private var searchJob: Job? = null // ✅ Para debounce
 
     // Variables del formulario
     var nombre by mutableStateOf("")
@@ -42,26 +45,32 @@ class ProductoViewModel : ViewModel() {
             repository.obtenerProductos().collect { lista ->
                 state = state.copy(
                     productos = lista,
-                    productosFiltrados = lista, // Al inicio mostramos todo
+                    productosFiltrados = lista,
                     isLoading = false
                 )
-                // Si había una búsqueda activa, volvemos a filtrar
                 if (searchQuery.isNotEmpty()) onSearchQueryChange(searchQuery)
             }
         }
     }
 
-    // --- NUEVA FUNCIÓN DE BÚSQUEDA ---
+    // ✅ BÚSQUEDA CON DEBOUNCE (espera 300ms antes de buscar)
     fun onSearchQueryChange(query: String) {
         searchQuery = query
-        if (query.isBlank()) {
-            state = state.copy(productosFiltrados = state.productos)
-        } else {
-            val filtrados = state.productos.filter {
-                it.nombre.contains(query, ignoreCase = true) ||
-                        it.codigo.contains(query, ignoreCase = true)
+        searchJob?.cancel()
+
+        searchJob = viewModelScope.launch {
+            delay(300) // Esperar 300ms
+
+            if (query.isBlank()) {
+                state = state.copy(productosFiltrados = state.productos)
+            } else {
+                val filtrados = state.productos.filter {
+                    it.nombre.contains(query, ignoreCase = true) ||
+                            it.codigo.contains(query, ignoreCase = true) ||
+                            it.categoria.contains(query, ignoreCase = true)
+                }
+                state = state.copy(productosFiltrados = filtrados)
             }
-            state = state.copy(productosFiltrados = filtrados)
         }
     }
 
@@ -92,8 +101,24 @@ class ProductoViewModel : ViewModel() {
         val stockVal = stock.toIntOrNull()
         val precioVal = precioUnitario.toDoubleOrNull()
 
-        if (nombreVal.isEmpty() || codigoVal.isEmpty() || stockVal == null || precioVal == null) {
-            state = state.copy(error = "Por favor completa todos los campos correctamente")
+        // ✅ VALIDACIONES MEJORADAS
+        if (nombreVal.isEmpty()) {
+            state = state.copy(error = "El nombre es obligatorio")
+            return
+        }
+
+        if (codigoVal.isEmpty()) {
+            state = state.copy(error = "El código es obligatorio")
+            return
+        }
+
+        if (stockVal == null || stockVal < 0) {
+            state = state.copy(error = "Stock inválido (debe ser un número positivo)")
+            return
+        }
+
+        if (precioVal == null || precioVal <= 0) {
+            state = state.copy(error = "Precio inválido (debe ser mayor a 0)")
             return
         }
 
@@ -102,30 +127,46 @@ class ProductoViewModel : ViewModel() {
 
             val resultado = if (productoAEditar == null) {
                 val nuevoProducto = Producto(
-                    nombre = nombreVal, codigo = codigoVal, stock = stockVal,
-                    precioUnitario = precioVal, categoria = categoria, descripcion = descripcion
+                    nombre = nombreVal,
+                    codigo = codigoVal,
+                    stock = stockVal,
+                    precioUnitario = precioVal,
+                    categoria = categoria,
+                    descripcion = descripcion
                 )
                 repository.agregarProducto(nuevoProducto)
             } else {
                 val productoActualizado = productoAEditar!!.copy(
-                    nombre = nombreVal, codigo = codigoVal, stock = stockVal,
-                    precioUnitario = precioVal, categoria = categoria, descripcion = descripcion
+                    nombre = nombreVal,
+                    codigo = codigoVal,
+                    stock = stockVal,
+                    precioUnitario = precioVal,
+                    categoria = categoria,
+                    descripcion = descripcion
                 )
                 repository.actualizarProducto(productoActualizado)
             }
 
             if (resultado.isSuccess) {
-                state = state.copy(isLoading = false, successMessage = "Producto guardado correctamente")
+                state = state.copy(
+                    isLoading = false,
+                    successMessage = "Producto guardado correctamente"
+                )
                 limpiarFormulario()
                 onSuccess()
             } else {
-                state = state.copy(isLoading = false, error = "Error: ${resultado.exceptionOrNull()?.message}")
+                state = state.copy(
+                    isLoading = false,
+                    error = "Error: ${resultado.exceptionOrNull()?.message}"
+                )
             }
         }
     }
 
     fun aumentarStock(productoId: String, cantidad: Int) {
-        viewModelScope.launch { repository.aumentarStock(productoId, cantidad) }
+        viewModelScope.launch {
+            repository.aumentarStock(productoId, cantidad)
+        }
     }
 
     fun eliminarProducto(productoId: String, onSuccess: () -> Unit) {
@@ -135,5 +176,7 @@ class ProductoViewModel : ViewModel() {
         }
     }
 
-    fun cancelarEdicion() { limpiarFormulario() }
+    fun cancelarEdicion() {
+        limpiarFormulario()
+    }
 }

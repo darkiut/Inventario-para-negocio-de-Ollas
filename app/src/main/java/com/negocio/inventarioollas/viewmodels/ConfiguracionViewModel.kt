@@ -10,7 +10,7 @@ import com.negocio.inventarioollas.repository.FirebaseRepository
 import kotlinx.coroutines.launch
 
 class ConfiguracionViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    private val repository = FirebaseRepository
 
     var nombre by mutableStateOf("")
     var ruc by mutableStateOf("")
@@ -28,13 +28,14 @@ class ConfiguracionViewModel : ViewModel() {
     private fun cargarDatos() {
         viewModelScope.launch {
             isLoading = true
-            repository.obtenerDatosNegocio().onSuccess { datos ->
-                nombre = datos.nombre
-                ruc = datos.ruc
-                direccion = datos.direccion
-                telefono = datos.telefono
-                mensajeFinal = datos.mensajeFinal
-            }
+            repository.obtenerDatosNegocio()
+                .onSuccess { datos ->
+                    nombre = datos.nombre
+                    ruc = datos.ruc
+                    direccion = datos.direccion
+                    telefono = datos.telefono
+                    mensajeFinal = datos.mensajeFinal
+                }
             isLoading = false
         }
     }
@@ -43,12 +44,15 @@ class ConfiguracionViewModel : ViewModel() {
         viewModelScope.launch {
             isLoading = true
             val datos = DatosNegocio(nombre, ruc, direccion, telefono, mensajeFinal)
-            repository.guardarDatosNegocio(datos).onSuccess {
-                mensajeExito = "Datos guardados correctamente"
-            }
+            repository.guardarDatosNegocio(datos)
+                .onSuccess {
+                    mensajeExito = "Datos guardados correctamente"
+                }
             isLoading = false
         }
     }
 
-    fun limpiarMensaje() { mensajeExito = null }
+    fun limpiarMensaje() {
+        mensajeExito = null
+    }
 }

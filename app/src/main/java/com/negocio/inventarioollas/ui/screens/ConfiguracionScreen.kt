@@ -54,7 +54,10 @@ fun ConfiguracionScreen(
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 if (viewModel.isLoading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 } else {
                     Icon(Icons.Default.Save, contentDescription = "Guardar")
                 }
@@ -69,7 +72,11 @@ fun ConfiguracionScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Estos datos aparecerán en los PDFs (Boletas/Facturas)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "Estos datos aparecerán en los PDFs (Boletas/Facturas)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
 
             OutlinedTextField(
                 value = viewModel.nombre,
@@ -77,24 +84,28 @@ fun ConfiguracionScreen(
                 label = { Text("Nombre del Negocio") },
                 modifier = Modifier.fillMaxWidth()
             )
+
             OutlinedTextField(
                 value = viewModel.ruc,
                 onValueChange = { viewModel.ruc = it },
                 label = { Text("RUC del Negocio") },
                 modifier = Modifier.fillMaxWidth()
             )
+
             OutlinedTextField(
                 value = viewModel.direccion,
                 onValueChange = { viewModel.direccion = it },
                 label = { Text("Dirección") },
                 modifier = Modifier.fillMaxWidth()
             )
+
             OutlinedTextField(
                 value = viewModel.telefono,
                 onValueChange = { viewModel.telefono = it },
                 label = { Text("Teléfono de Contacto") },
                 modifier = Modifier.fillMaxWidth()
             )
+
             OutlinedTextField(
                 value = viewModel.mensajeFinal,
                 onValueChange = { viewModel.mensajeFinal = it },

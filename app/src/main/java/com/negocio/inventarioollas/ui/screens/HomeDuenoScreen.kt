@@ -27,6 +27,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -316,8 +321,28 @@ fun HomeDuenoScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(state.ventasFiltradas) { venta ->
-                                    VentaCard(venta = venta)
+                                    VentaCard(
+                                        venta = venta,
+                                        onEliminar = { ventaId ->
+                                            scope.launch {
+                                                duenoViewModel.eliminarVenta(ventaId) {
+                                                    // Mostrar mensaje de éxito
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Venta eliminada y stock repuesto correctamente",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        },
+                                        onVerDetalles = { ventaId ->
+                                            duenoViewModel.obtenerDetallesVenta(ventaId) { venta ->
+                                                // Ya se muestra en el diálogo automáticamente
+                                            }
+                                        }
+                                    )
                                 }
+
                             }
                         }
                     }
@@ -439,9 +464,16 @@ fun HomeDuenoScreen(
 }
 
 @Composable
-fun VentaCard(venta: Venta) {
+fun VentaCard(
+    venta: Venta,
+    onEliminar: (String) -> Unit,
+    onVerDetalles: (String) -> Unit
+) {
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
     val fecha = dateFormat.format(Date(venta.fecha))
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showDetailsDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -478,6 +510,48 @@ fun VentaCard(venta: Venta) {
                         )
                     }
                 }
+
+                // ✅ NUEVO - Menú de opciones
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Ver detalles") },
+                            onClick = {
+                                showMenu = false
+                                showDetailsDialog = true
+                            },
+                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Eliminar venta", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = fecha, fontSize = 12.sp, color = Color.Gray)
                 Text(
                     text = "S/ ${String.format("%.2f", venta.total)}",
                     fontSize = 20.sp,
@@ -485,9 +559,6 @@ fun VentaCard(venta: Venta) {
                     color = Color(0xFF4CAF50)
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = fecha, fontSize = 12.sp, color = Color.Gray)
 
             if (venta.clienteTelefono.isNotBlank()) {
                 Text(
@@ -515,5 +586,156 @@ fun VentaCard(venta: Venta) {
                 }
             }
         }
+    }
+
+    // ✅ NUEVO - Diálogo de confirmación para eliminar
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = { Text("¿Eliminar venta?") },
+            text = {
+                Column {
+                    Text("Esta acción no se puede deshacer.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Se repondrá el stock de los siguientes productos:",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    venta.productos.values.forEach { item ->
+                        Text("• ${item.nombre}: +${item.cantidad} unidades", fontSize = 14.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onEliminar(venta.id)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // ✅ NUEVO - Diálogo de detalles
+    if (showDetailsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDetailsDialog = false },
+            title = { Text("Detalles de la Venta") },
+            text = {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        DetailRow("Cliente:", venta.clienteNombre)
+                    }
+                    if (venta.clienteTelefono.isNotBlank()) {
+                        item { DetailRow("Teléfono:", venta.clienteTelefono) }
+                    }
+                    if (venta.clienteDni.isNotBlank()) {
+                        item { DetailRow("DNI/RUC:", venta.clienteDni) }
+                    }
+                    item {
+                        DetailRow("Tipo Documento:", venta.tipoDocumento)
+                    }
+                    item {
+                        DetailRow("Vendedor:", venta.vendedorNombre)
+                    }
+                    item {
+                        DetailRow("Fecha:", fecha)
+                    }
+                    item {
+                        Divider()
+                    }
+                    item {
+                        Text("Productos:", fontWeight = FontWeight.Bold)
+                    }
+                    items(venta.productos.values.toList()) { item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(item.nombre, fontWeight = FontWeight.Medium)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "Cantidad: ${item.cantidad}",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                    Text(
+                                        "S/ ${item.precioUnitario} c/u",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Text(
+                                    "Subtotal: S/ ${String.format("%.2f", item.subtotal)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Divider()
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("TOTAL:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(
+                                "S/ ${String.format("%.2f", venta.total)}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDetailsDialog = false }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+}
+
+// ✅ NUEVO - Componente auxiliar para detalles
+@Composable
+fun DetailRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(120.dp)
+        )
+        Text(text = value, modifier = Modifier.weight(1f))
     }
 }

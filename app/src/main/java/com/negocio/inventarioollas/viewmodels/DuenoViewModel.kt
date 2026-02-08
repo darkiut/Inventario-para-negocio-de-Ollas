@@ -8,13 +8,15 @@ import androidx.lifecycle.viewModelScope
 import com.negocio.inventarioollas.models.Producto
 import com.negocio.inventarioollas.models.Venta
 import com.negocio.inventarioollas.repository.FirebaseRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
 data class DuenoState(
     val productos: List<Producto> = emptyList(),
-    val productosFiltrados: List<Producto> = emptyList(), // LISTA PARA MOSTRAR
+    val productosFiltrados: List<Producto> = emptyList(),
     val ventas: List<Venta> = emptyList(),
     val ventasFiltradas: List<Venta> = emptyList(),
     val totalVentasHoy: Double = 0.0,
@@ -27,7 +29,8 @@ data class DuenoState(
 )
 
 class DuenoViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    // ✅ Ahora usa el singleton
+    private val repository = FirebaseRepository
 
     var state by mutableStateOf(DuenoState())
         private set
@@ -35,8 +38,8 @@ class DuenoViewModel : ViewModel() {
     var filtroVendedor: String? = null
     var filtroFecha: String? = null
 
-    // Variable para el buscador del Dueño
     var searchQuery by mutableStateOf("")
+    private var searchJob: Job? = null // ✅ Para debounce
 
     init {
         cargarDatos()
@@ -51,7 +54,7 @@ class DuenoViewModel : ViewModel() {
                 repository.obtenerProductos().collect { productos ->
                     state = state.copy(
                         productos = productos,
-                        productosFiltrados = productos // Inicialmente todo
+                        productosFiltrados = productos
                     )
                     if (searchQuery.isNotEmpty()) onSearchQueryChange(searchQuery)
                 }
@@ -66,22 +69,32 @@ class DuenoViewModel : ViewModel() {
         }
     }
 
-    // --- FUNCIÓN DE BÚSQUEDA DEL DUEÑO ---
+    // ✅ BÚSQUEDA CON DEBOUNCE
     fun onSearchQueryChange(query: String) {
         searchQuery = query
-        if (query.isBlank()) {
-            state = state.copy(productosFiltrados = state.productos)
-        } else {
-            val filtrados = state.productos.filter {
-                it.nombre.contains(query, ignoreCase = true) ||
-                        it.codigo.contains(query, ignoreCase = true)
+        searchJob?.cancel()
+
+        searchJob = viewModelScope.launch {
+            delay(300) // Esperar 300ms
+
+            if (query.isBlank()) {
+                state = state.copy(productosFiltrados = state.productos)
+            } else {
+                val filtrados = state.productos.filter {
+                    it.nombre.contains(query, ignoreCase = true) ||
+                            it.codigo.contains(query, ignoreCase = true) ||
+                            it.categoria.contains(query, ignoreCase = true)
+                }
+                state = state.copy(productosFiltrados = filtrados)
             }
-            state = state.copy(productosFiltrados = filtrados)
         }
     }
 
     private fun procesarVentas(todasLasVentas: List<Venta>) {
-        val fechaLimite = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }.timeInMillis
+        val fechaLimite = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, -30)
+        }.timeInMillis
+
         val ventasRecientes = todasLasVentas.filter { it.fecha >= fechaLimite }
         val ventasAntiguasCount = todasLasVentas.size - ventasRecientes.size
 
@@ -128,14 +141,54 @@ class DuenoViewModel : ViewModel() {
         if (filtroFecha != null) {
             lista = lista.filter { sdf.format(Date(it.fecha)) == filtroFecha }
         }
+
         if (filtroVendedor != null) {
             lista = lista.filter { it.vendedorId == filtroVendedor }
         }
 
-        state = state.copy(ventasFiltradas = lista, fechaSeleccionada = filtroFecha)
+        state = state.copy(
+            ventasFiltradas = lista,
+            fechaSeleccionada = filtroFecha
+        )
     }
 
     fun aumentarStock(productoId: String, cantidad: Int) {
-        viewModelScope.launch { repository.aumentarStock(productoId, cantidad) }
+        viewModelScope.launch {
+            repository.aumentarStock(productoId, cantidad)
+        }
     }
+
+    // ✅ NUEVO - Eliminar venta con confirmación
+    fun eliminarVenta(ventaId: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            state = state.copy(isLoading = true)
+
+            repository.eliminarVenta(ventaId)
+                .onSuccess {
+                    // Recargar datos
+                    cargarDatos()
+                    onSuccess()
+                }
+                .onFailure { e ->
+                    state = state.copy(
+                        isLoading = false,
+                        error = "Error al eliminar venta: ${e.message}"
+                    )
+                }
+        }
+    }
+
+    // ✅ NUEVO - Ver detalles de venta
+    fun obtenerDetallesVenta(ventaId: String, onSuccess: (Venta) -> Unit) {
+        viewModelScope.launch {
+            repository.obtenerVenta(ventaId)
+                .onSuccess { venta ->
+                    onSuccess(venta)
+                }
+                .onFailure { e ->
+                    state = state.copy(error = "Error al obtener venta: ${e.message}")
+                }
+        }
+    }
+
 }

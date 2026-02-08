@@ -11,20 +11,19 @@ import kotlinx.coroutines.launch
 
 // Estado de Autenticación
 data class AuthState(
-    val usuario: Usuario? = null, // Esto es lo que MainActivity necesita leer
+    val usuario: Usuario? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
     val isAuthenticated: Boolean = false
 )
 
 class AuthViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    // ✅ Ahora usa el singleton (sin paréntesis)
+    private val repository = FirebaseRepository
 
-    // Variable PÚBLICA llamada 'state' para que MainActivity la encuentre
     var state by mutableStateOf(AuthState())
         private set
 
-    // Variable auxiliar para obtener el usuario actual rápidamente
     val usuarioActual: Usuario?
         get() = state.usuario
 
@@ -53,8 +52,19 @@ class AuthViewModel : ViewModel() {
     }
 
     fun iniciarSesion(email: String, password: String, onSuccess: (Usuario) -> Unit) {
+        // ✅ VALIDACIONES MEJORADAS
         if (email.isBlank() || password.isBlank()) {
             state = state.copy(error = "Llena todos los campos")
+            return
+        }
+
+        if (!email.contains("@") || !email.contains(".")) {
+            state = state.copy(error = "Email inválido")
+            return
+        }
+
+        if (password.length < 6) {
+            state = state.copy(error = "La contraseña debe tener al menos 6 caracteres")
             return
         }
 
@@ -79,8 +89,24 @@ class AuthViewModel : ViewModel() {
     }
 
     fun registrarUsuario(nombre: String, email: String, password: String, rol: String, onSuccess: () -> Unit) {
+        // ✅ VALIDACIONES MEJORADAS
         if (nombre.isBlank() || email.isBlank() || password.isBlank()) {
             state = state.copy(error = "Llena todos los campos")
+            return
+        }
+
+        if (!email.contains("@") || !email.contains(".")) {
+            state = state.copy(error = "Email inválido")
+            return
+        }
+
+        if (password.length < 8) {
+            state = state.copy(error = "La contraseña debe tener al menos 8 caracteres")
+            return
+        }
+
+        if (!password.any { it.isDigit() }) {
+            state = state.copy(error = "La contraseña debe contener al menos un número")
             return
         }
 
@@ -102,7 +128,7 @@ class AuthViewModel : ViewModel() {
 
     fun cerrarSesion() {
         repository.cerrarSesion()
-        state = AuthState() // Reiniciar estado
+        state = AuthState()
     }
 
     fun limpiarErrores() {
